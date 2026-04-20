@@ -1,4 +1,4 @@
-from nanograd.optim.optimizer import Adam, AdamW, Optimizer, RMSProp, SGD
+from nanograd.optim.optimizer import Adagrad, Adam, AdamW, Optimizer, RMSProp, SGD
 from nanograd.optim.lr_scheduler import (
     CosineAnnealingLR,
     ExponentialLR,
@@ -11,6 +11,7 @@ __all__ = [
     "SGD",
     "Adam",
     "AdamW",
+    "Adagrad",
     "RMSProp",
     "StepLR",
     "CosineAnnealingLR",

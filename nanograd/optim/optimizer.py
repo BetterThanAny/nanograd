@@ -133,6 +133,29 @@ class AdamW(Optimizer):
         p.data -= self.lr * m_hat / (np.sqrt(v_hat) + self.eps)
 
 
+class Adagrad(Optimizer):
+    def __init__(
+        self,
+        params: Iterable[Tensor],
+        lr: float = 1e-2,
+        eps: float = 1e-10,
+        weight_decay: float = 0.0,
+    ):
+        super().__init__(params)
+        self.lr = lr
+        self.eps = eps
+        self.weight_decay = weight_decay
+
+    def _step_param(self, p: Tensor, state: dict) -> None:
+        g = p.grad
+        if self.weight_decay != 0:
+            g = g + self.weight_decay * p.data
+        if "sum_sq" not in state:
+            state["sum_sq"] = np.zeros_like(p.data)
+        state["sum_sq"] += g * g
+        p.data -= self.lr * g / (np.sqrt(state["sum_sq"]) + self.eps)
+
+
 class RMSProp(Optimizer):
     def __init__(
         self,
