@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.npz
+*.npy
+data/
+uv.lock
+
+# claude-local (per global policy)
+CLAUDE.md
+.claude/
