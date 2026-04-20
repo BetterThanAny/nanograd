@@ -65,6 +65,33 @@ Additional bugs fixed this round (self-audit):
 
 - GAN (DCGAN-style) on MNIST — ConvTranspose + BN + BCE-logits + two-optimizer loop
 
+## Round 5 — ops + recurrence + generative/seq2seq
+
+- `where` / `clamp` / `cumsum` / `masked_fill` / `topk` / `argmax` / `argmin` core ops
+- Multi-layer RNN/LSTM/GRU (num_layers param; h shape → (num_layers, B, H))
+- MNIST VAE (ELBO 332 → 206)
+- seq2seq LSTM copy task (87.5% exact-match)
+- self-audit regression tests (where broadcasting, ConvTranspose stride=2 gradcheck, np.add.at mixed indexing)
+
+## Round 6 — losses + Trainer + RL + cross-attention
+
+- `FocalLoss`, `TripletLoss`
+- `Trainer` class with EarlyStopping/ModelCheckpoint callbacks
+- REINFORCE on 5×5 gridworld (greedy 8-step optimal path)
+- `MultiHeadCrossAttention` + `TransformerDecoderBlock`
+- Encoder–decoder transformer translator (100% reversal on toy corpus)
+
+## Round 7 — ViT / U-Net / DQN / EMA / op-surface expansion
+
+| # | 主题 | 验收 | 实际结果 |
+|---|------|------|---------|
+| R7-1 | Vision Transformer | MNIST test acc > 90% | ✅ **95.9%** (139k params, 6 ep) |
+| R7-2 | U-Net autoencoder | MNIST MSE < 0.05 | ✅ **0.0048** (29k params, 2 ep) |
+| R7-3 | DQN on gridworld | greedy return > 0.5 | ✅ **0.930** (optimal 8-step) |
+| R7-4 | EMA parameters | wired into VAE demo | ✅ shadow + swap_into ctx mgr |
+| R7-5 | ops backfill | std/var/flip/roll/gather/scatter_add/F.normalize | ✅ 14 gradcheck-style tests |
+| R7-6 | audit | fix everything found | ✅ EMA.swap_into buffer-swap bug |
+
 ## 目录结构
 
 ```

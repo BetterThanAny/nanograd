@@ -9,14 +9,15 @@ kernel fuser.
 | Module | Contents |
 |--------|----------|
 | `nanograd.tensor` | `Tensor` class, dynamic autograd, broadcasting-aware backward |
-| `nanograd.ops` | Elementwise, reductions, `matmul`, shape ops, `cat`/`stack`/`pad`, indexing |
-| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `GroupNorm`, `InstanceNorm2d`, `Embedding`, `Conv2d`, `ConvTranspose2d`, `MaxPool2d`, `AvgPool2d`, `AdaptiveAvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`/`Bidirectional`, `MultiHeadAttention`, `SinusoidalPositionalEncoding`, `LearnedPositionalEncoding`, `TransformerBlock` |
+| `nanograd.ops` | Elementwise, reductions, `matmul`, shape ops, `cat`/`stack`/`pad`, indexing, `where`/`clamp`/`masked_fill`/`cumsum`/`topk` |
+| `nanograd.ops_extra` | `flip`/`roll`/`gather`/`scatter_add` + `Tensor.std`/`var` |
+| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `GroupNorm`, `InstanceNorm2d`, `Embedding`, `Conv2d`, `ConvTranspose2d`, `MaxPool2d`, `AvgPool2d`, `AdaptiveAvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`/`Bidirectional`, `MultiHeadAttention`, `MultiHeadCrossAttention`, `SinusoidalPositionalEncoding`, `LearnedPositionalEncoding`, `TransformerBlock`, `TransformerDecoderBlock` |
 | `nanograd.nn.init` | Kaiming / Xavier (uniform + normal), zeros/ones/normal/uniform initializers |
-| `nanograd.nn.functional` | Stable activations (ReLU / Sigmoid / Tanh / GELU / ELU / SiLU / Mish / Softmax / LogSoftmax) and losses (MSE / BCE / BCEWithLogits / CrossEntropy / L1 / Huber) |
+| `nanograd.nn.functional` | Stable activations (ReLU / Sigmoid / Tanh / GELU / ELU / SiLU / Mish / Softmax / LogSoftmax), losses (MSE / BCE / BCEWithLogits / CrossEntropy / L1 / Huber / Focal / Triplet), `normalize` (L_p) |
 | `nanograd.optim` | `SGD` (+momentum / nesterov), `Adam`, `AdamW`, `Adagrad`, `RMSProp`, LR schedulers, `clip_grad_norm_`, `clip_grad_value_` |
 | `nanograd.data` | `Dataset`, `DataLoader`, `MNIST`, `CIFAR10` loaders, image transforms (`Normalize`, `RandomCrop`, `RandomHorizontalFlip`) |
-| `nanograd.models` | Prebuilt architectures: `BasicBlock`, `ResNet`, `resnet18`, `resnet_cifar` |
-| `nanograd.training` | `EarlyStopping`, `ModelCheckpoint`, `MetricTracker` |
+| `nanograd.models` | Prebuilt architectures: `BasicBlock`, `ResNet`, `resnet18`, `resnet_cifar`, `ViT`, `UNet` |
+| `nanograd.training` | `EarlyStopping`, `ModelCheckpoint`, `MetricTracker`, `Trainer`, `EMA` |
 | `nanograd.utils` | `gradcheck`, DOT graph viz, param summary, op profiler, checkpoint save/load |
 | `nanograd.jit` | Elementwise op fusion — chain multiple ops into a single buffer |
 
@@ -42,22 +43,25 @@ for X, y in loader:
 
 ## Verification metrics
 
-All milestones are test-verified. Non-slow tests: **236 passing in ~3s**.
+All milestones are test-verified. Non-slow tests: **316 passing in ~6s**.
 
 | Task | Metric | Achieved |
 |------|--------|----------|
 | XOR | loss → 0 | 7e-6 |
 | MNIST MLP (5 ep, Adam) | test accuracy | **97.39%** |
 | MNIST CNN (2 ep, Adam) | test accuracy | **98.25%** |
+| MNIST ViT (6 ep, 10k subset, cosine LR) | test accuracy | **95.9%** (139k params) |
+| MNIST U-Net autoencoder (2 ep, 1.5k subset) | reconstruction MSE | **0.0048** (29k params) |
 | CIFAR-10 CNN (1 ep, 5k subset) | test accuracy | **41.96%** (random 10%) |
 | CIFAR-10 ResNet-8 (n=1, 1 ep, 5k subset, w/ aug) | test accuracy | **32.54%** (3.2× random) |
 | Char-level LSTM LM | memorizes tiny corpus | loss < 0.05, generates correctly |
 | MNIST Conv autoencoder (3 ep) | reconstruction MSE | 0.25 → **0.013** |
 | Tiny Transformer LM (300 steps) | loss + generation | 0.63 → **0.12**, completes "the quick brown fox jumps over the lazy dog" |
 | DCGAN smoke test (100 steps) | D/G losses stable + finite | d=1.34 → 0.07, g=1.00 → 4.13 (both bounded) |
-| MNIST VAE (2 epochs) | ELBO | 331.56 → **205.91** |
+| MNIST VAE (2 epochs, EMA decay=0.95) | ELBO | 331.56 → **205.91** |
 | Seq2seq LSTM copy task (400 steps) | exact-match acc | **87.5%** on 5-token sequences |
 | REINFORCE gridworld (300 eps) | greedy return | **0.930 in 8 steps** (optimal) |
+| DQN gridworld (300 eps) | greedy return | **0.930 in 8 steps** |
 | Encoder-Decoder Transformer (reversal, 600 steps) | exact-match acc | **100%** on 6-digit reversals |
 | Numerical gradient check | max abs diff | < 1e-3 across all ops |
 | Elementwise fusion | 500×500 chain, 5 ops | **12.7× vs eager** |
@@ -84,7 +88,10 @@ uv run pytest -m slow         # integration: MNIST MLP reaches 95%
 uv run python examples/xor.py
 uv run python examples/mnist_mlp.py
 uv run python examples/mnist_cnn.py
-uv run python examples/cifar_cnn.py 5000 1   # subset of 5000, 1 epoch
+uv run python examples/mnist_vit.py            # ViT, ~95% test acc in 6 ep
+uv run python examples/mnist_unet.py           # U-Net autoencoder, MSE < 0.005
+uv run python examples/cifar_cnn.py 5000 1     # subset of 5000, 1 epoch
+uv run python examples/dqn_gridworld.py        # DQN on 5×5 gridworld
 uv run python benchmarks/throughput.py
 ```
 
