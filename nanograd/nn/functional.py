@@ -256,3 +256,7 @@ def bce_with_logits_loss(logits: Tensor, target: Tensor) -> Tensor:
 
 def cross_entropy(logits: Tensor, target: Tensor) -> Tensor:
     return CrossEntropyLoss.apply(logits, target)
+
+
+# re-export extra losses
+from nanograd.nn.losses_extra import huber_loss, l1_loss  # noqa: E402,F401
