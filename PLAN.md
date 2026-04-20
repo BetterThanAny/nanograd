@@ -20,20 +20,50 @@
 
 ## 里程碑（每个一个 commit，含测试）
 
-| # | 主题 | 验收 |
-|---|------|------|
-| M1 | Tensor & autograd 核心 | 标量/向量反向传播数值梯度误差 < 1e-5 |
-| M2 | 张量算子扩展 | matmul/sum/mean/reshape/transpose + broadcasting 的梯度测试全过 |
-| M3 | 激活 & 损失 | ReLU/Sigmoid/Tanh/Softmax + MSE/CE/BCE 测试全过 |
-| M4 | nn.Module 体系 | Linear/Sequential/Dropout/LayerNorm；参数迭代正确 |
-| M5 | 优化器 | SGD/Adam/AdamW/RMSProp + 调度器；在二次函数上收敛 |
-| M6 | 数据管道 | Dataset/DataLoader/MNIST loader |
-| M7 | XOR + MNIST MLP | XOR loss → 0；MNIST ≥ 95% |
-| M8 | 卷积 & 池化 | Conv2d/MaxPool2d/BatchNorm2d；MNIST CNN ≥ 98% |
-| M9 | 可视化 & 调试 | dot 图输出、参数统计、梯度检查工具 |
-| M10 | RNN / LSTM / Attention | toy seq 任务上收敛 |
-| M11 | JIT & kernel fusion | elementwise 融合，benchmark 有可观测加速 |
-| M12 | 真实任务 benchmark | MNIST + CIFAR-10 CNN；对比 PyTorch |
+## Round 1 — 12 core milestones (ALL DONE)
+
+| # | 主题 | 验收 | 实际结果 |
+|---|------|------|---------|
+| M1 | Tensor & autograd 核心 | 数值梯度误差 < 1e-5 | ✅ gradcheck pass |
+| M2 | 张量算子扩展 | matmul/reduce/shape/broadcast 梯度测试 | ✅ |
+| M3 | 激活 & 损失 | ReLU/Sigmoid/Tanh/Softmax + MSE/CE/BCE | ✅ with stability |
+| M4 | nn.Module 体系 | Linear/Sequential/Dropout/LayerNorm | ✅ |
+| M5 | 优化器 | SGD/Adam/AdamW/RMSProp + 调度器 | ✅ |
+| M6 | 数据管道 | Dataset/DataLoader/MNIST | ✅ |
+| M7 | XOR + MNIST MLP | loss→0; MNIST≥95% | ✅ **97.39%** |
+| M8 | 卷积 & 池化 | MNIST CNN ≥ 98% | ✅ **98.25%** |
+| M9 | 可视化 & 调试 | dot 图 / 参数 / profiler | ✅ |
+| M10 | RNN / LSTM / Attention | toy seq 收敛 | ✅ |
+| M11 | JIT & kernel fusion | elementwise 融合 | ✅ **12.7× speedup** |
+| M12 | 真实任务 benchmark | MNIST + CIFAR-10 CNN | ✅ CIFAR **41.96%** |
+
+## Round 2 — bug audit + feature expansion
+
+- Independent audit found 4 critical + 4 important bugs — all fixed, 16 regression tests added.
+- Added: `cat`/`stack`/`pad`/`AdaptiveAvgPool2d`/`GroupNorm`/`InstanceNorm2d`
+- Added: `ELU`/`SiLU`/`Mish` activations
+- Added: image transforms (`Normalize`, `RandomCrop`, `RandomHorizontalFlip`, `Compose`)
+- Added: training utils (`EarlyStopping`, `ModelCheckpoint`, `MetricTracker`)
+- Added: `BasicBlock` / `ResNet` / `resnet18` / `resnet_cifar`
+- Added: `Bidirectional` wrapper for RNNs
+- ResNet-CIFAR-8 (78k params, 1 ep, 5k subset, w/ aug) → **32.54%** (3.2× random)
+
+## Round 3 — advanced features
+
+- `ConvTranspose2d` (im2col/col2im via einsum)
+- `SinusoidalPositionalEncoding`, `LearnedPositionalEncoding`
+- Weight inits (`kaiming_uniform_`, `kaiming_normal_`, `xavier_uniform_`, `xavier_normal_`)
+- Gradient clipping (`clip_grad_norm_`, `clip_grad_value_`)
+- Examples: MNIST autoencoder (MSE 0.25 → **0.013**), Transformer char LM (generates "lazy dog" corpus)
+
+Additional bugs fixed this round (self-audit):
+- Sinusoidal PE shape was wrong for odd `dim`
+- `state_dict` didn't include buffers (BN running stats lost across save/load)
+- `clip_grad_norm_` missed `abs()` for non-2 norms
+
+## Round 4 — demos
+
+- GAN (DCGAN-style) on MNIST — ConvTranspose + BN + BCE-logits + two-optimizer loop
 
 ## 目录结构
 
