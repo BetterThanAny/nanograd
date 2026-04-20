@@ -1,4 +1,4 @@
-"""Small training utilities: EarlyStopping, ModelCheckpoint, MetricTracker, Trainer."""
+"""Small training utilities: EarlyStopping, ModelCheckpoint, MetricTracker, Trainer, EMA."""
 from __future__ import annotations
 
 import time
@@ -205,3 +205,84 @@ class MetricTracker:
 
     def summary(self) -> dict[str, float]:
         return {k: self.avg(k) for k in self._sums}
+
+
+class EMA:
+    """Exponential moving average of a model's parameters.
+
+    Keeps a shadow copy of every parameter (and, on request, registered buffers
+    such as BatchNorm running stats) with decay ``decay``:
+        shadow = decay * shadow + (1 - decay) * param
+
+    Usage:
+        ema = EMA(model, decay=0.999)
+        # training loop:
+        loss.backward(); opt.step(); ema.update()
+        # eval:
+        with ema.swap_into(model):
+            evaluate(model)
+    """
+
+    def __init__(self, model: Module, decay: float = 0.999, include_buffers: bool = False):
+        if not (0.0 < decay < 1.0):
+            raise ValueError("decay must be in (0, 1)")
+        self.model = model
+        self.decay = decay
+        self.include_buffers = include_buffers
+        self._shadow: dict[str, np.ndarray] = {}
+        for name, p in model.named_parameters():
+            self._shadow[name] = p.data.copy()
+        if include_buffers:
+            for name, b in self._buffer_items():
+                self._shadow[f"_buf_:{name}"] = b.copy()
+
+    def _buffer_items(self):
+        # Module exposes named_buffers() (R3 adds state_dict buffer support)
+        if hasattr(self.model, "named_buffers"):
+            yield from self.model.named_buffers()
+
+    def update(self) -> None:
+        d = self.decay
+        for name, p in self.model.named_parameters():
+            s = self._shadow[name]
+            s *= d
+            s += (1.0 - d) * p.data
+        if self.include_buffers:
+            for name, b in self._buffer_items():
+                s = self._shadow[f"_buf_:{name}"]
+                s *= d
+                s += (1.0 - d) * b
+
+    def apply_to(self, model: Optional[Module] = None) -> None:
+        """Copy EMA shadow weights into ``model`` (defaults to tracked model)."""
+        m = model or self.model
+        for name, p in m.named_parameters():
+            if name in self._shadow:
+                p.data[...] = self._shadow[name]
+        if self.include_buffers and hasattr(m, "named_buffers"):
+            for name, b in m.named_buffers():
+                key = f"_buf_:{name}"
+                if key in self._shadow:
+                    b[...] = self._shadow[key]
+
+    class _Swap:
+        def __init__(self, ema: "EMA", model: Module):
+            self.ema = ema
+            self.model = model
+            self._backup: dict[str, np.ndarray] = {}
+
+        def __enter__(self):
+            for name, p in self.model.named_parameters():
+                self._backup[name] = p.data.copy()
+                if name in self.ema._shadow:
+                    p.data[...] = self.ema._shadow[name]
+            return self.model
+
+        def __exit__(self, *exc):
+            for name, p in self.model.named_parameters():
+                if name in self._backup:
+                    p.data[...] = self._backup[name]
+
+    def swap_into(self, model: Optional[Module] = None):
+        """Context manager that installs EMA weights for ``model`` for its duration."""
+        return EMA._Swap(self, model or self.model)

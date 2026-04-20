@@ -18,6 +18,7 @@ from nanograd import Tensor, nn, optim
 from nanograd.data import DataLoader, TensorDataset
 from nanograd.data.mnist import MNIST
 from nanograd.nn import functional as F
+from nanograd.training import EMA
 
 
 LATENT = 16
@@ -91,6 +92,7 @@ def main(subset: int = 5000, epochs: int = 3):
 
     model = VAE()
     opt = optim.Adam(model.parameters(), lr=1e-3)
+    ema = EMA(model, decay=0.95)
     print(f"params: {model.num_params():,}", flush=True)
 
     rng = np.random.default_rng(0)
@@ -108,6 +110,7 @@ def main(subset: int = 5000, epochs: int = 3):
             loss.backward()
             optim.clip_grad_norm_(model.parameters(), max_norm=5.0)
             opt.step()
+            ema.update()
             elbo_sum += loss.item() * len(X_batch)
             recon_sum += recon.item() * len(X_batch)
             kl_sum += kl.item() * len(X_batch)
@@ -118,8 +121,19 @@ def main(subset: int = 5000, epochs: int = 3):
         dt = time.time() - t0
         print(f"epoch {ep}  ELBO={avg:.2f}  recon={recon_sum/n:.2f}  KL={kl_sum/n:.2f}  ({dt:.1f}s)", flush=True)
 
+    # Eval with EMA weights swapped in — should be at least as good (noisy SGD smoothed)
+    eval_rng = np.random.default_rng(42)
+    eval_X = Tensor(X[:256])
+
+    def eval_elbo() -> float:
+        logits, mu, lv = model(eval_X, eval_rng)
+        return elbo_loss(logits, eval_X, mu, lv)[0].item()
+
+    raw_eval = eval_elbo()
+    with ema.swap_into(model):
+        ema_eval = eval_elbo()
     print(f"\nELBO: {first_elbo:.2f} → {avg:.2f}", flush=True)
-    # should clearly improve
+    print(f"eval ELBO (raw)={raw_eval:.2f}   (EMA)={ema_eval:.2f}", flush=True)
     assert avg < first_elbo - 10, f"VAE did not learn: {first_elbo:.2f} → {avg:.2f}"
 
 
