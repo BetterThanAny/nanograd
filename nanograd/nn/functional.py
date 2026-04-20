@@ -67,6 +67,50 @@ class LeakyReLU(Function):
         return (g * np.where(a > 0, 1.0, self.negative_slope).astype(g.dtype),)
 
 
+class ELU(Function):
+    def forward(self, a, *, alpha=1.0):
+        self.alpha = alpha
+        self.save_for_backward(a)
+        return np.where(a > 0, a, alpha * (np.exp(a) - 1)).astype(a.dtype)
+
+    def backward(self, g):
+        (a,) = self.saved
+        grad = np.where(a > 0, 1.0, self.alpha * np.exp(a)).astype(g.dtype)
+        return (g * grad,)
+
+
+class SiLU(Function):
+    """SiLU / Swish: x * sigmoid(x)"""
+
+    def forward(self, a):
+        sig = np.where(a >= 0, 1.0 / (1.0 + np.exp(-a)), np.exp(a) / (1.0 + np.exp(a))).astype(a.dtype)
+        self.save_for_backward(a, sig)
+        return (a * sig).astype(a.dtype)
+
+    def backward(self, g):
+        a, sig = self.saved
+        # d/dx (x * sigmoid(x)) = sigmoid(x) + x * sigmoid(x) * (1 - sigmoid(x))
+        return (g * (sig + a * sig * (1 - sig)),)
+
+
+class Mish(Function):
+    """Mish: x * tanh(softplus(x)) where softplus(x) = log(1 + exp(x))"""
+
+    def forward(self, a):
+        sp = np.log1p(np.exp(-np.abs(a))) + np.maximum(a, 0)  # stable softplus
+        th = np.tanh(sp)
+        out = a * th
+        self.save_for_backward(a, sp, th)
+        return out.astype(a.dtype)
+
+    def backward(self, g):
+        a, sp, th = self.saved
+        sech2 = 1 - th * th
+        sig = np.where(a >= 0, 1.0 / (1.0 + np.exp(-a)), np.exp(a) / (1.0 + np.exp(a)))
+        grad = th + a * sech2 * sig
+        return (g * grad.astype(g.dtype),)
+
+
 class GELU(Function):
     """Approximate GELU (tanh-based, matches PyTorch's approximate='tanh')."""
 
@@ -232,6 +276,22 @@ def leaky_relu(x: Tensor, negative_slope: float = 0.01) -> Tensor:
 
 def gelu(x: Tensor) -> Tensor:
     return GELU.apply(x)
+
+
+def elu(x: Tensor, alpha: float = 1.0) -> Tensor:
+    return ELU.apply(x, alpha=alpha)
+
+
+def silu(x: Tensor) -> Tensor:
+    return SiLU.apply(x)
+
+
+# alias
+swish = silu
+
+
+def mish(x: Tensor) -> Tensor:
+    return Mish.apply(x)
 
 
 def softmax(x: Tensor, axis: int = -1) -> Tensor:

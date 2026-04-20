@@ -284,6 +284,77 @@ class _BN2dEvalFn(Function):
         return dx, dgamma, dbeta
 
 
+class _GroupNormFn(Function):
+    def forward(self, x, gamma, beta, *, num_groups, eps):
+        N, C, H, W = x.shape
+        G = num_groups
+        assert C % G == 0, f"channels {C} must be divisible by groups {G}"
+        Cg = C // G
+        xg = x.reshape(N, G, Cg, H, W)
+        # normalize over (Cg, H, W) per (N, G)
+        axes = (2, 3, 4)
+        mean = xg.mean(axis=axes, keepdims=True)
+        var = xg.var(axis=axes, keepdims=True)
+        inv = 1.0 / np.sqrt(var + eps)
+        xhat = (xg - mean) * inv
+        xhat = xhat.reshape(N, C, H, W)
+        out = xhat * gamma.reshape(1, C, 1, 1) + beta.reshape(1, C, 1, 1)
+        self.save_for_backward(xhat, gamma, inv, G, Cg, N, C, H, W)
+        return out.astype(x.dtype)
+
+    def backward(self, g):
+        xhat, gamma, inv, G, Cg, N, C, H, W = self.saved
+        g_b = gamma.reshape(1, C, 1, 1)
+        dxhat = (g * g_b).reshape(N, G, Cg, H, W)
+        xhat_g = xhat.reshape(N, G, Cg, H, W)
+        axes = (2, 3, 4)
+        M = Cg * H * W
+        dx = (1.0 / M) * inv * (
+            M * dxhat
+            - dxhat.sum(axis=axes, keepdims=True)
+            - xhat_g * (dxhat * xhat_g).sum(axis=axes, keepdims=True)
+        )
+        dx = dx.reshape(N, C, H, W)
+        dgamma = (g * xhat).sum(axis=(0, 2, 3))
+        dbeta = g.sum(axis=(0, 2, 3))
+        return dx, dgamma, dbeta
+
+
+class GroupNorm(Module):
+    def __init__(self, num_groups: int, num_channels: int, eps: float = 1e-5):
+        super().__init__()
+        assert num_channels % num_groups == 0
+        self.num_groups = num_groups
+        self.num_channels = num_channels
+        self.eps = eps
+        self.weight = Parameter(np.ones(num_channels, dtype=np.float32))
+        self.bias = Parameter(np.zeros(num_channels, dtype=np.float32))
+
+    def forward(self, x: Tensor) -> Tensor:
+        return _GroupNormFn.apply(x, self.weight, self.bias, num_groups=self.num_groups, eps=self.eps)
+
+
+class InstanceNorm2d(Module):
+    """Equivalent to GroupNorm with num_groups = num_channels."""
+
+    def __init__(self, num_features: int, eps: float = 1e-5, affine: bool = True):
+        super().__init__()
+        self.num_features = num_features
+        self.eps = eps
+        if affine:
+            self.weight = Parameter(np.ones(num_features, dtype=np.float32))
+            self.bias = Parameter(np.zeros(num_features, dtype=np.float32))
+        else:
+            self.weight = None
+            self.bias = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        C = x.shape[1]
+        w = self.weight if self.weight is not None else Tensor(np.ones(C, dtype=np.float32))
+        b = self.bias if self.bias is not None else Tensor(np.zeros(C, dtype=np.float32))
+        return _GroupNormFn.apply(x, w, b, num_groups=C, eps=self.eps)
+
+
 class BatchNorm2d(Module):
     def __init__(self, num_features: int, eps: float = 1e-5, momentum: float = 0.1):
         super().__init__()

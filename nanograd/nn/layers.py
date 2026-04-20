@@ -89,6 +89,25 @@ class GELU(Module):
         return F.gelu(x)
 
 
+class ELU(Module):
+    def __init__(self, alpha: float = 1.0):
+        super().__init__()
+        self.alpha = alpha
+
+    def forward(self, x: Tensor) -> Tensor:
+        return F.elu(x, self.alpha)
+
+
+class SiLU(Module):
+    def forward(self, x: Tensor) -> Tensor:
+        return F.silu(x)
+
+
+class Mish(Module):
+    def forward(self, x: Tensor) -> Tensor:
+        return F.mish(x)
+
+
 class LeakyReLU(Module):
     def __init__(self, negative_slope: float = 0.01):
         super().__init__()
