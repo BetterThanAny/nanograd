@@ -9,11 +9,13 @@ kernel fuser.
 | Module | Contents |
 |--------|----------|
 | `nanograd.tensor` | `Tensor` class, dynamic autograd, broadcasting-aware backward |
-| `nanograd.ops` | Elementwise, reductions, `matmul`, shape ops, indexing |
-| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `Embedding`, `Conv2d`/`Max/AvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`, `MultiHeadAttention`, `TransformerBlock` |
-| `nanograd.nn.functional` | Stable activations (ReLU/Sigmoid/Tanh/GELU/Softmax/LogSoftmax) and losses (MSE/BCE/BCEWithLogits/CrossEntropy/L1/Huber) |
-| `nanograd.optim` | `SGD` (+momentum/nesterov), `Adam`, `AdamW`, `Adagrad`, `RMSProp`, LR schedulers |
-| `nanograd.data` | `Dataset`, `DataLoader`, `MNIST`, `CIFAR10` loaders |
+| `nanograd.ops` | Elementwise, reductions, `matmul`, shape ops, `cat`/`stack`/`pad`, indexing |
+| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `GroupNorm`, `InstanceNorm2d`, `Embedding`, `Conv2d`, `MaxPool2d`, `AvgPool2d`, `AdaptiveAvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`, `MultiHeadAttention`, `TransformerBlock` |
+| `nanograd.nn.functional` | Stable activations (ReLU / Sigmoid / Tanh / GELU / ELU / SiLU / Mish / Softmax / LogSoftmax) and losses (MSE / BCE / BCEWithLogits / CrossEntropy / L1 / Huber) |
+| `nanograd.optim` | `SGD` (+momentum / nesterov), `Adam`, `AdamW`, `Adagrad`, `RMSProp`, LR schedulers |
+| `nanograd.data` | `Dataset`, `DataLoader`, `MNIST`, `CIFAR10` loaders, image transforms (`Normalize`, `RandomCrop`, `RandomHorizontalFlip`) |
+| `nanograd.models` | Prebuilt architectures: `BasicBlock`, `ResNet`, `resnet18`, `resnet_cifar` |
+| `nanograd.training` | `EarlyStopping`, `ModelCheckpoint`, `MetricTracker` |
 | `nanograd.utils` | `gradcheck`, DOT graph viz, param summary, op profiler, checkpoint save/load |
 | `nanograd.jit` | Elementwise op fusion — chain multiple ops into a single buffer |
 
@@ -39,7 +41,7 @@ for X, y in loader:
 
 ## Verification metrics
 
-All milestones are test-verified. Non-slow tests: **138 passing in <1s**.
+All milestones are test-verified. Non-slow tests: **212 passing in ~3s**.
 
 | Task | Metric | Achieved |
 |------|--------|----------|
