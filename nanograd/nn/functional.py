@@ -319,4 +319,4 @@ def cross_entropy(logits: Tensor, target: Tensor) -> Tensor:
 
 
 # re-export extra losses
-from nanograd.nn.losses_extra import huber_loss, l1_loss  # noqa: E402,F401
+from nanograd.nn.losses_extra import focal_loss, huber_loss, l1_loss, triplet_loss  # noqa: E402,F401

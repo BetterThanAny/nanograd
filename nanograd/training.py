@@ -1,12 +1,16 @@
-"""Small training utilities: EarlyStopping, ModelCheckpoint, MetricTracker."""
+"""Small training utilities: EarlyStopping, ModelCheckpoint, MetricTracker, Trainer."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional, Sequence
 
 import numpy as np
 
 from nanograd.nn.module import Module
+from nanograd.optim.grad_clip import clip_grad_norm_
+from nanograd.optim.optimizer import Optimizer
+from nanograd.tensor import Tensor
 from nanograd.utils.checkpoint import save
 
 
@@ -73,6 +77,111 @@ class ModelCheckpoint:
             save(module, self.path)
             return True
         return False
+
+
+class Trainer:
+    """Minimal training loop orchestrator.
+
+    ``step_fn`` takes a batch (the DataLoader yield) and returns a scalar Tensor loss.
+    Optional ``eval_fn`` runs in eval mode on a validation loader and returns a dict of metrics.
+
+    Example:
+        def step(batch):
+            X, y = batch
+            logits = model(Tensor(X))
+            return F.cross_entropy(logits, Tensor(y))
+
+        trainer = Trainer(model, optimizer, step)
+        trainer.fit(train_loader, epochs=3)
+    """
+
+    def __init__(
+        self,
+        model: Module,
+        optimizer: Optimizer,
+        step_fn: Callable,
+        eval_fn: Optional[Callable] = None,
+        grad_clip: Optional[float] = None,
+        on_epoch_end: Optional[Callable] = None,
+        callbacks: Sequence = (),
+    ):
+        self.model = model
+        self.optimizer = optimizer
+        self.step_fn = step_fn
+        self.eval_fn = eval_fn
+        self.grad_clip = grad_clip
+        self.on_epoch_end = on_epoch_end
+        self.callbacks = list(callbacks)  # EarlyStopping / ModelCheckpoint etc.
+
+    def fit(
+        self,
+        train_loader: Iterable,
+        epochs: int = 1,
+        val_loader: Optional[Iterable] = None,
+        verbose: bool = True,
+    ) -> dict:
+        history: dict[str, list] = {"train_loss": [], "val_loss": []}
+
+        for ep in range(1, epochs + 1):
+            self.model.train()
+            t0 = time.time()
+            tracker = MetricTracker()
+            for batch in train_loader:
+                loss = self.step_fn(batch)
+                self.optimizer.zero_grad()
+                loss.backward()
+                if self.grad_clip is not None:
+                    clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                self.optimizer.step()
+                # batch size: try to infer
+                n = self._batch_size(batch)
+                tracker.update("loss", loss.item(), n=n)
+            train_loss = tracker.avg("loss")
+            history["train_loss"].append(train_loss)
+
+            val_metrics: dict = {}
+            if val_loader is not None and self.eval_fn is not None:
+                self.model.eval()
+                val_metrics = self.eval_fn(val_loader)
+                if "loss" in val_metrics:
+                    history["val_loss"].append(val_metrics["loss"])
+
+            dt = time.time() - t0
+            if verbose:
+                msg = f"epoch {ep}/{epochs}  train_loss={train_loss:.4f}"
+                if val_metrics:
+                    msg += "  " + "  ".join(f"val_{k}={v:.4f}" for k, v in val_metrics.items())
+                msg += f"  ({dt:.1f}s)"
+                print(msg, flush=True)
+
+            if self.on_epoch_end is not None:
+                self.on_epoch_end(ep, train_loss, val_metrics)
+
+            # run callbacks; ES can stop the loop
+            stop = False
+            for cb in self.callbacks:
+                monitor_val = val_metrics.get("loss", train_loss) if isinstance(cb, EarlyStopping) else None
+                if isinstance(cb, EarlyStopping):
+                    if cb.step(monitor_val):
+                        stop = True
+                elif isinstance(cb, ModelCheckpoint):
+                    cb.step(val_metrics.get("loss", train_loss), self.model)
+            if stop:
+                if verbose:
+                    print(f"[trainer] early stopping at epoch {ep}", flush=True)
+                break
+
+        return history
+
+    @staticmethod
+    def _batch_size(batch) -> int:
+        if isinstance(batch, tuple):
+            b = batch[0]
+        else:
+            b = batch
+        if hasattr(b, "shape"):
+            return b.shape[0] if len(b.shape) else 1
+        return 1
 
 
 class MetricTracker:
