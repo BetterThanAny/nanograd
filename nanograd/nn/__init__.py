@@ -18,7 +18,9 @@ from nanograd.nn.layers import (
     Softmax,
     Tanh,
 )
+from nanograd.nn.attention import MultiHeadAttention, TransformerBlock, scaled_dot_product_attention
 from nanograd.nn.module import Module, Parameter
+from nanograd.nn.rnn import LSTM, LSTMCell, RNN, RNNCell
 
 __all__ = [
     "F",
@@ -39,4 +41,11 @@ __all__ = [
     "AvgPool2d",
     "BatchNorm2d",
     "Flatten",
+    "RNN",
+    "RNNCell",
+    "LSTM",
+    "LSTMCell",
+    "MultiHeadAttention",
+    "TransformerBlock",
+    "scaled_dot_product_attention",
 ]
