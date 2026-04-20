@@ -318,5 +318,16 @@ def cross_entropy(logits: Tensor, target: Tensor) -> Tensor:
     return CrossEntropyLoss.apply(logits, target)
 
 
+def normalize(x: Tensor, p: float = 2.0, axis: int = -1, eps: float = 1e-12) -> Tensor:
+    """L_p normalize along ``axis``. Default: L2 (p=2)."""
+    if p == 2.0:
+        sq = (x * x).sum(axis=axis, keepdims=True)
+        denom = (sq + eps).sqrt()
+    else:
+        pw = (x.abs() ** p).sum(axis=axis, keepdims=True)
+        denom = (pw + eps) ** (1.0 / p)
+    return x / denom
+
+
 # re-export extra losses
 from nanograd.nn.losses_extra import focal_loss, huber_loss, l1_loss, triplet_loss  # noqa: E402,F401
