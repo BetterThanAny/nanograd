@@ -82,16 +82,26 @@ class Module:
     def num_params(self) -> int:
         return sum(int(np.prod(p.shape)) for p in self.parameters())
 
+    def named_buffers(self, prefix: str = "") -> Iterator[tuple[str, np.ndarray]]:
+        for name, b in self._buffers.items():
+            yield (f"{prefix}{name}", b)
+        for mname, mod in self._modules.items():
+            yield from mod.named_buffers(prefix=f"{prefix}{mname}.")
+
     def state_dict(self) -> dict:
         out = {}
         for name, p in self.named_parameters():
             out[name] = p.data.copy()
+        for name, b in self.named_buffers():
+            out[name] = b.copy()
         return out
 
     def load_state_dict(self, state: dict) -> None:
         params = dict(self.named_parameters())
-        missing = set(params) - set(state)
-        extra = set(state) - set(params)
+        buffers = dict(self.named_buffers())
+        all_keys = set(params) | set(buffers)
+        missing = all_keys - set(state)
+        extra = set(state) - all_keys
         if missing or extra:
             raise KeyError(f"state_dict mismatch: missing={missing} extra={extra}")
         for name, p in params.items():
@@ -99,3 +109,8 @@ class Module:
             if data.shape != p.data.shape:
                 raise ValueError(f"shape mismatch for {name}: {data.shape} vs {p.data.shape}")
             p.data[...] = data
+        for name, b in buffers.items():
+            data = state[name]
+            if data.shape != b.shape:
+                raise ValueError(f"shape mismatch for {name}: {data.shape} vs {b.shape}")
+            b[...] = data

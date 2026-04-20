@@ -19,6 +19,12 @@ def test_sinusoidal_pe_shape():
     assert pe.shape == (10, 16)
 
 
+def test_sinusoidal_pe_odd_dim_shape():
+    """Regression test: odd dim must not crash or produce wrong shapes."""
+    pe = sinusoidal_positional_encoding(10, 5)
+    assert pe.shape == (10, 5)
+
+
 def test_sinusoidal_pe_values():
     pe = sinusoidal_positional_encoding(4, 4)
     # position 0 should be all sin(0)=0, cos(0)=1
@@ -125,6 +131,22 @@ def test_clip_grad_value():
     p.grad = np.array([-10.0, -0.5, 0.0, 0.5, 10.0], dtype=np.float32)
     optim.clip_grad_value_([p], clip_value=1.0)
     assert np.allclose(p.grad, [-1.0, -0.5, 0.0, 0.5, 1.0])
+
+
+def test_clip_grad_norm_p1_handles_negative():
+    """Regression: 1-norm was computing sum(x) instead of sum(|x|)."""
+    p = nn.Parameter(np.zeros(3, dtype=np.float32))
+    p.grad = np.array([-3.0, -2.0, 1.0], dtype=np.float32)
+    # 1-norm = |-3| + |-2| + |1| = 6
+    total = optim.clip_grad_norm_([p], max_norm=100.0, norm_type=1)
+    assert np.isclose(total, 6.0)
+
+
+def test_clip_grad_norm_inf():
+    p = nn.Parameter(np.zeros(4, dtype=np.float32))
+    p.grad = np.array([0.5, -3.0, 1.5, 2.0], dtype=np.float32)
+    total = optim.clip_grad_norm_([p], max_norm=100.0, norm_type=float("inf"))
+    assert np.isclose(total, 3.0)
 
 
 def test_clip_grad_skips_none():

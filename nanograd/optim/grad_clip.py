@@ -20,7 +20,8 @@ def clip_grad_norm_(params: Iterable[Tensor], max_norm: float, norm_type: float 
     if norm_type == float("inf"):
         total = max(float(np.abs(p.grad).max()) for p in ps)
     else:
-        sq = sum(float((p.grad ** norm_type).sum()) for p in ps)
+        # p-norm over concatenated grads: (sum |x|^p)^(1/p)
+        sq = sum(float((np.abs(p.grad) ** norm_type).sum()) for p in ps)
         total = sq ** (1.0 / norm_type)
 
     clip = max_norm / (total + 1e-6)

@@ -179,3 +179,43 @@ def test_I3_tensor_index_with_float_dtype_coerced():
     idx = Tensor(np.array([0.0, 2.0, 4.0], dtype=np.float32))
     y = x[idx]
     assert np.array_equal(y.data, [0.0, 2.0, 4.0])
+
+
+# ---------------------------------------------------------------------------
+# C5 (self-audit): state_dict must include buffers (BN running stats)
+# ---------------------------------------------------------------------------
+
+
+def test_C5_state_dict_includes_bn_buffers():
+    m = nn.BatchNorm2d(4)
+    # run training forward to shift running stats away from init
+    m.train()
+    x = Tensor(np.random.default_rng(0).standard_normal((8, 4, 3, 3)).astype(np.float32) * 3 + 1)
+    m(x)
+    sd = m.state_dict()
+    assert "running_mean" in sd
+    assert "running_var" in sd
+    assert not np.allclose(sd["running_mean"], 0.0)
+    # round trip
+    m2 = nn.BatchNorm2d(4)
+    m2.load_state_dict(sd)
+    assert np.allclose(m2.running_mean, m.running_mean)
+    assert np.allclose(m2.running_var, m.running_var)
+
+
+def test_C5_state_dict_nested_buffers():
+    class Wrap(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.bn = nn.BatchNorm2d(2)
+
+    w = Wrap()
+    w.train()
+    x = Tensor(np.random.default_rng(1).standard_normal((4, 2, 3, 3)).astype(np.float32))
+    w.bn(x)
+    sd = w.state_dict()
+    assert "bn.running_mean" in sd
+    assert "bn.running_var" in sd
+    w2 = Wrap()
+    w2.load_state_dict(sd)
+    assert np.allclose(w2.bn.running_mean, w.bn.running_mean)

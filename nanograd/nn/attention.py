@@ -17,12 +17,14 @@ def sinusoidal_positional_encoding(max_len: int, dim: int) -> np.ndarray:
     """Classic Transformer positional encoding (Vaswani et al. 2017).
 
     Returns (max_len, dim) ndarray of sin/cos frequencies.
+    Works for both even and odd ``dim``.
     """
     pe = np.zeros((max_len, dim), dtype=np.float32)
     pos = np.arange(max_len, dtype=np.float32)[:, None]
+    # div has len ceil(dim/2); even-indexed cols use full div, odd-indexed cols use first floor(dim/2)
     div = np.exp(np.arange(0, dim, 2, dtype=np.float32) * (-math.log(10000.0) / dim))
     pe[:, 0::2] = np.sin(pos * div)
-    pe[:, 1::2] = np.cos(pos * div[: (dim // 2 + dim % 2)] if dim % 2 else pos * div)
+    pe[:, 1::2] = np.cos(pos * div[: dim // 2])
     return pe
 
 
