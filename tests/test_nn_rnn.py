@@ -80,6 +80,24 @@ def test_lstm_gradcheck_small(rng):
     gradcheck(lambda x: m(x)[0].sum(), [x], atol=1e-2, rtol=1e-2)
 
 
+def test_bidirectional_shape(rng):
+    fw = nn.LSTM(4, 8, seed=0)
+    bw = nn.LSTM(4, 8, seed=1)
+    bi = nn.Bidirectional(fw, bw)
+    x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
+    out = bi(x)
+    assert out.shape == (2, 5, 16)
+    assert bi.hidden_size == 16
+
+
+def test_bidirectional_gradcheck(rng):
+    fw = nn.RNN(2, 3, seed=0)
+    bw = nn.RNN(2, 3, seed=1)
+    bi = nn.Bidirectional(fw, bw)
+    x = _rt((1, 3, 2), rng)
+    gradcheck(lambda x: bi(x).sum(), [x], atol=1e-2, rtol=1e-2)
+
+
 def test_scaled_dot_product_attention_shape(rng):
     B, T, D = 2, 4, 6
     q = Tensor(rng.standard_normal((B, T, D)).astype(np.float32))

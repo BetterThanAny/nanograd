@@ -184,6 +184,59 @@ class LSTM(Module):
 from nanograd.function import Function
 
 
+class Bidirectional(Module):
+    """Wraps an RNN/LSTM/GRU and runs it on both the forward and reversed sequence,
+    then concatenates the outputs along the hidden dim.
+
+    Given an inner module with hidden_size H, output has hidden_size 2*H.
+    """
+
+    def __init__(self, module_fw: Module, module_bw: Module):
+        super().__init__()
+        self.fw = module_fw
+        self.bw = module_bw
+        # expose hidden size of concatenated output
+        inner = getattr(module_fw, "hidden_size", None)
+        self.hidden_size = 2 * inner if inner is not None else None
+
+    def forward(self, x: Tensor):
+        # fw on x; bw on reversed x, then reverse the output back
+        out_fw, *rest_fw = _as_tuple(self.fw(x))
+        x_rev = _reverse_time(x)
+        out_bw, *rest_bw = _as_tuple(self.bw(x_rev))
+        out_bw = _reverse_time(out_bw)
+        # concat along last dim (hidden)
+        out = _ConcatLastDim.apply(out_fw, out_bw)
+        return out
+
+
+def _as_tuple(v):
+    if isinstance(v, tuple):
+        return v
+    return (v,)
+
+
+def _reverse_time(x: Tensor) -> Tensor:
+    # reverse along T axis (axis=1 for (B, T, D))
+    from nanograd.ops import Getitem
+
+    B, T, D = x.shape
+    idx = np.arange(T - 1, -1, -1, dtype=np.int64)
+    # numpy-style advanced indexing on axis 1: x[:, idx, :]
+    return Getitem.apply(x, idx=(slice(None), idx, slice(None)))
+
+
+class _ConcatLastDim(Function):
+    """Concatenate two tensors along the last dim."""
+
+    def forward(self, a, b):
+        self.split = a.shape[-1]
+        return np.concatenate([a, b], axis=-1)
+
+    def backward(self, g):
+        return g[..., : self.split], g[..., self.split :]
+
+
 class _Stack(Function):
     """Stack a list of tensors along a new axis."""
 

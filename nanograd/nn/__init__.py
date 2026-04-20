@@ -27,7 +27,7 @@ from nanograd.nn.layers import (
 from nanograd.nn.attention import MultiHeadAttention, TransformerBlock, scaled_dot_product_attention
 from nanograd.nn.embedding import Embedding
 from nanograd.nn.module import Module, Parameter
-from nanograd.nn.rnn import GRU, GRUCell, LSTM, LSTMCell, RNN, RNNCell
+from nanograd.nn.rnn import Bidirectional, GRU, GRUCell, LSTM, LSTMCell, RNN, RNNCell
 
 __all__ = [
     "F",
@@ -60,6 +60,7 @@ __all__ = [
     "LSTMCell",
     "GRU",
     "GRUCell",
+    "Bidirectional",
     "MultiHeadAttention",
     "TransformerBlock",
     "scaled_dot_product_attention",
