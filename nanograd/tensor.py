@@ -115,6 +115,11 @@ class Tensor:
 
         build(self)
 
+        # reset intermediate grads so repeat backward() doesn't double-count.
+        # (leaves without _ctx keep their grad — callers use zero_grad() for those.)
+        for t in topo:
+            t.grad = None
+
         # accumulate input grad on self
         self.grad = grad_arr if self.grad is None else self.grad + grad_arr
 

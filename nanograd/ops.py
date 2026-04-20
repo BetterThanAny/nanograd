@@ -290,6 +290,16 @@ class Getitem(Function):
         return (out,)
 
 
+def _unwrap_idx(idx):
+    """Allow Tensor-as-index by pulling out .data (and coercing float → int64)."""
+    if isinstance(idx, Tensor):
+        d = idx.data
+        return d.astype(np.int64) if np.issubdtype(d.dtype, np.floating) else d
+    if isinstance(idx, tuple):
+        return tuple(_unwrap_idx(i) for i in idx)
+    return idx
+
+
 # ---------------------------------------------------------------------------
 # concat / stack / pad
 # ---------------------------------------------------------------------------
@@ -375,15 +385,19 @@ Tensor.expand = lambda self, *shape: Expand.apply(
 Tensor.matmul = lambda self, other: MatMul.apply(self, _wrap(other))
 
 # indexing
-Tensor.__getitem__ = lambda self, idx: Getitem.apply(self, idx=idx)
+Tensor.__getitem__ = lambda self, idx: Getitem.apply(self, idx=_unwrap_idx(idx))
 
 
 # module-level convenience functions
 def cat(tensors, axis: int = 0):
+    if not tensors:
+        raise ValueError("cat requires at least one tensor")
     return Concat.apply(*tensors, axis=axis)
 
 
 def stack(tensors, axis: int = 0):
+    if not tensors:
+        raise ValueError("stack requires at least one tensor")
     return Stack.apply(*tensors, axis=axis)
 
 

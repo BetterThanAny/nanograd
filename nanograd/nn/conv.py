@@ -30,13 +30,13 @@ def _conv_out_size(h: int, k: int, stride: int, pad: int) -> int:
     return (h + 2 * pad - k) // stride + 1
 
 
-def im2col(x: np.ndarray, kh: int, kw: int, stride: int, pad: int) -> np.ndarray:
-    """(N,C,H,W) -> (N, C, kh, kw, H_out, W_out). Zero-padded."""
+def im2col(x: np.ndarray, kh: int, kw: int, stride: int, pad: int, fill_value: float = 0.0) -> np.ndarray:
+    """(N,C,H,W) -> (N, C, kh, kw, H_out, W_out). Padded with ``fill_value``."""
     N, C, H, W = x.shape
     H_out = _conv_out_size(H, kh, stride, pad)
     W_out = _conv_out_size(W, kw, stride, pad)
     if pad:
-        x_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)))
+        x_pad = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)), constant_values=fill_value)
     else:
         x_pad = x
     cols = np.empty((N, C, kh, kw, H_out, W_out), dtype=x.dtype)
@@ -150,7 +150,9 @@ class Conv2d(Module):
 
 class _MaxPool2dFn(Function):
     def forward(self, x, *, kh, kw, stride, padding):
-        cols = im2col(x, kh, kw, stride, padding)          # (N, C, kh, kw, H_out, W_out)
+        # pad with -inf so padded positions never win max comparisons
+        fill = np.finfo(x.dtype).min if np.issubdtype(x.dtype, np.floating) else np.iinfo(x.dtype).min
+        cols = im2col(x, kh, kw, stride, padding, fill_value=fill)  # (N, C, kh, kw, H_out, W_out)
         N, C, _, _, H_out, W_out = cols.shape
         cols_flat = cols.reshape(N, C, kh * kw, H_out, W_out)
         out = cols_flat.max(axis=2)

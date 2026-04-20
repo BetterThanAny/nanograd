@@ -54,7 +54,8 @@ def test_fused_benchmark_faster_than_eager():
     """Fused chain should be faster than eager elementwise chain on large arrays."""
     import time
 
-    x = np.random.default_rng(0).standard_normal((500, 500)).astype(np.float32)
+    # scale inputs small so final exp(...) doesn't overflow
+    x = np.random.default_rng(0).standard_normal((500, 500)).astype(np.float32) * 0.1
 
     # Eager: 5 separate ops, 4 intermediates
     def eager():

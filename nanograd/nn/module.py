@@ -26,14 +26,16 @@ class Module:
 
     # --- registration ---
     def __setattr__(self, name: str, value):
+        # clear any prior registration under this name so reassignment doesn't leak
+        if name in self._parameters and not isinstance(value, Parameter):
+            del self._parameters[name]
+        if name in self._modules and not isinstance(value, Module):
+            del self._modules[name]
         if isinstance(value, Parameter):
             self._parameters[name] = value
-            object.__setattr__(self, name, value)
         elif isinstance(value, Module):
             self._modules[name] = value
-            object.__setattr__(self, name, value)
-        else:
-            object.__setattr__(self, name, value)
+        object.__setattr__(self, name, value)
 
     def register_buffer(self, name: str, value: np.ndarray) -> None:
         self._buffers[name] = value

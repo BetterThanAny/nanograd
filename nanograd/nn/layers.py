@@ -31,7 +31,6 @@ class Linear(Module):
             self.bias = Parameter(b)
         else:
             self.bias = None
-            self._modules.pop("bias", None)
 
     def forward(self, x: Tensor) -> Tensor:
         out = x @ self.weight

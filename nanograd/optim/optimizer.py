@@ -11,9 +11,13 @@ class Optimizer:
     """Base class. Subclasses override `step_param`."""
 
     def __init__(self, params: Iterable[Tensor]):
-        self.params: List[Tensor] = [p for p in params]
+        # dedupe by id so tied / weight-shared parameters step only once
+        seen: dict[int, Tensor] = {}
+        for p in params:
+            seen.setdefault(id(p), p)
+        self.params: List[Tensor] = list(seen.values())
         self.state: dict = {}
-        for i, p in enumerate(self.params):
+        for p in self.params:
             self.state[id(p)] = {}
 
     def zero_grad(self) -> None:

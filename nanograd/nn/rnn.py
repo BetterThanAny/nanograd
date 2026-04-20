@@ -57,13 +57,14 @@ class RNN(Module):
             h = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
         else:
             h = h0
+        if T == 0:
+            empty = Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32))
+            return empty, h
         outs = []
         for t in range(T):
             xt = x[:, t, :]
             h = self.cell(xt, h)
             outs.append(h)
-        # stack outs along time: use concat via reshape — simpler: build via np on the data side won't capture grad.
-        # We need a Stack function.
         out = _stack(outs, axis=1)
         return out, h
 
@@ -138,6 +139,8 @@ class GRU(Module):
             h = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
         else:
             h = h0
+        if T == 0:
+            return Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32)), h
         outs = []
         for t in range(T):
             h = self.cell(x[:, t, :], h)
@@ -162,6 +165,9 @@ class LSTM(Module):
             c = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
         else:
             h, c = state
+        if T == 0:
+            empty = Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32))
+            return empty, (h, c)
         outs = []
         for t in range(T):
             h, c = self.cell(x[:, t, :], (h, c))
