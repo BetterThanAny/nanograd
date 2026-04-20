@@ -141,3 +141,19 @@ def test_topk_2d_axis():
     vals, idx = ng.topk(a, k=2, axis=1)
     assert np.array_equal(vals.data, [[5, 3], [8, 7]])
     assert np.array_equal(idx, [[1, 2], [0, 2]])
+
+
+# ---------- where broadcasting ----------
+
+
+def test_where_broadcasting():
+    """cond / a / b can have different broadcastable shapes."""
+    a = Tensor(np.array([[1, 2, 3]], dtype=np.float32), requires_grad=True)       # (1,3)
+    b = Tensor(np.array([[10], [20]], dtype=np.float32), requires_grad=True)      # (2,1)
+    cond = np.array([[True, False, True], [False, True, False]])                  # (2,3)
+    y = ng.where(cond, a, b)
+    assert y.shape == (2, 3)
+    y.sum().backward()
+    # grads unbroadcast back to original shapes
+    assert a.grad.shape == (1, 3)
+    assert b.grad.shape == (2, 1)

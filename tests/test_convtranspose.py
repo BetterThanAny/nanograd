@@ -58,6 +58,13 @@ def test_convtranspose2d_matches_manual(rng):
     assert y.shape == (1, 1, 4, 4)
 
 
+def test_convtranspose2d_stride2_gradcheck(rng):
+    """Regression: verify gradcheck passes for stride=2, padding=1."""
+    m = nn.ConvTranspose2d(2, 3, 3, stride=2, padding=1, seed=0)
+    x = _rt((1, 2, 3, 3), rng)
+    gradcheck(lambda x: m(x).sum(), [x], atol=1e-2, rtol=1e-2)
+
+
 def test_convtranspose2d_backward_runs():
     m = nn.ConvTranspose2d(2, 3, 3, stride=2, padding=1, seed=0)
     x = Tensor(np.random.default_rng(0).standard_normal((2, 2, 4, 4)).astype(np.float32), requires_grad=True)
