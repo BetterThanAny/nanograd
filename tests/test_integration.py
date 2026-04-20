@@ -68,6 +68,50 @@ def test_small_classification():
     assert acc >= 0.95, f"acc={acc}"
 
 
+def test_seq2seq_transformer_reversal():
+    """Encoder-decoder Transformer learns to reverse short sequences via cross-attention."""
+    rng = np.random.default_rng(0)
+    VOCAB = 5
+    SEQ = 3
+    BOS, EOS = VOCAB, VOCAB + 1
+    V = VOCAB + 2
+
+    class T(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.emb = nn.Embedding(V, 16, seed=0)
+            self.pos = nn.SinusoidalPositionalEncoding(16, 16)
+            self.enc = nn.TransformerBlock(16, 2, seed=1)
+            self.dec = nn.TransformerDecoderBlock(16, 2, seed=2)
+            self.head = nn.Linear(16, V, seed=3)
+
+        def forward(self, src, dec_in):
+            c = self.enc(self.pos(self.emb(src)))
+            x = self.pos(self.emb(dec_in))
+            Tc = x.shape[1]
+            causal = np.tril(np.ones((Tc, Tc), dtype=bool))[None, None, :, :]
+            x = self.dec(x, c, causal_mask=causal)
+            return self.head(x)
+
+    model = T()
+    opt = optim.Adam(model.parameters(), lr=5e-3)
+    for _ in range(300):
+        src = rng.integers(0, VOCAB, size=(16, SEQ)).astype(np.int64)
+        tgt = src[:, ::-1].copy()
+        bos = np.full((16, 1), BOS, dtype=np.int64)
+        eos = np.full((16, 1), EOS, dtype=np.int64)
+        dec_in = np.concatenate([bos, tgt], axis=1)
+        dec_out = np.concatenate([tgt, eos], axis=1)
+        logits = model(src, dec_in)
+        B, Tc, Vc = logits.shape
+        loss = F.cross_entropy(logits.reshape(B * Tc, Vc), Tensor(dec_out.reshape(-1)))
+        opt.zero_grad()
+        loss.backward()
+        optim.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        opt.step()
+    assert loss.item() < 0.1, f"reversal not learned: loss={loss.item()}"
+
+
 def test_autoencoder_reconstruction():
     """ConvTranspose + Conv autoencoder memorizes a small image set."""
     rng = np.random.default_rng(0)

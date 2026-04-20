@@ -28,8 +28,10 @@ from nanograd.nn.layers import (
 from nanograd.nn.attention import (
     LearnedPositionalEncoding,
     MultiHeadAttention,
+    MultiHeadCrossAttention,
     SinusoidalPositionalEncoding,
     TransformerBlock,
+    TransformerDecoderBlock,
     scaled_dot_product_attention,
     sinusoidal_positional_encoding,
 )
@@ -71,7 +73,9 @@ __all__ = [
     "GRUCell",
     "Bidirectional",
     "MultiHeadAttention",
+    "MultiHeadCrossAttention",
     "TransformerBlock",
+    "TransformerDecoderBlock",
     "scaled_dot_product_attention",
     "sinusoidal_positional_encoding",
     "SinusoidalPositionalEncoding",
