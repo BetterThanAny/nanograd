@@ -49,6 +49,7 @@ All milestones are test-verified. Non-slow tests: **212 passing in ~3s**.
 | MNIST MLP (5 ep, Adam) | test accuracy | **97.39%** |
 | MNIST CNN (2 ep, Adam) | test accuracy | **98.25%** |
 | CIFAR-10 CNN (1 ep, 5k subset) | test accuracy | **41.96%** (random 10%) |
+| CIFAR-10 ResNet-8 (n=1, 1 ep, 5k subset, w/ aug) | test accuracy | **32.54%** (3.2× random) |
 | Char-level LSTM LM | memorizes tiny corpus | loss < 0.05, generates correctly |
 | Numerical gradient check | max abs diff | < 1e-3 across all ops |
 | Elementwise fusion | 500×500 chain, 5 ops | **12.7× vs eager** |
