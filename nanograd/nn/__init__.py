@@ -1,4 +1,11 @@
 from nanograd.nn import functional as F  # noqa: F401
+from nanograd.nn.conv import (
+    AvgPool2d,
+    BatchNorm2d,
+    Conv2d,
+    Flatten,
+    MaxPool2d,
+)
 from nanograd.nn.layers import (
     Dropout,
     GELU,
@@ -27,4 +34,9 @@ __all__ = [
     "GELU",
     "LeakyReLU",
     "Softmax",
+    "Conv2d",
+    "MaxPool2d",
+    "AvgPool2d",
+    "BatchNorm2d",
+    "Flatten",
 ]
