@@ -55,6 +55,8 @@ All milestones are test-verified. Non-slow tests: **236 passing in ~3s**.
 | MNIST Conv autoencoder (3 ep) | reconstruction MSE | 0.25 → **0.013** |
 | Tiny Transformer LM (300 steps) | loss + generation | 0.63 → **0.12**, completes "the quick brown fox jumps over the lazy dog" |
 | DCGAN smoke test (100 steps) | D/G losses stable + finite | d=1.34 → 0.07, g=1.00 → 4.13 (both bounded) |
+| MNIST VAE (2 epochs) | ELBO | 331.56 → **205.91** |
+| Seq2seq LSTM copy task (400 steps) | exact-match acc | **87.5%** on 5-token sequences |
 | Numerical gradient check | max abs diff | < 1e-3 across all ops |
 | Elementwise fusion | 500×500 chain, 5 ops | **12.7× vs eager** |
 
