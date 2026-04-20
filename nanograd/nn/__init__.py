@@ -1,5 +1,6 @@
 from nanograd.nn import functional as F  # noqa: F401
 from nanograd.nn.conv import (
+    AdaptiveAvgPool2d,
     AvgPool2d,
     BatchNorm2d,
     Conv2d,
@@ -40,6 +41,7 @@ __all__ = [
     "Conv2d",
     "MaxPool2d",
     "AvgPool2d",
+    "AdaptiveAvgPool2d",
     "BatchNorm2d",
     "Flatten",
     "RNN",

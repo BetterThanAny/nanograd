@@ -331,3 +331,29 @@ class Flatten(Module):
             tail *= s
         new_shape = shape[: self.start_dim] + (tail,)
         return x.reshape(*new_shape)
+
+
+class AdaptiveAvgPool2d(Module):
+    """Adaptive average pool to a target spatial size.
+
+    For target_size=1 (global average), computed as mean over H and W.
+    For other sizes, falls back to computing pool kernel/stride that approximates it.
+    """
+
+    def __init__(self, output_size):
+        super().__init__()
+        self.output_size = _pair(output_size)
+
+    def forward(self, x: Tensor) -> Tensor:
+        H, W = x.shape[-2], x.shape[-1]
+        oh, ow = self.output_size
+        if oh == 1 and ow == 1:
+            # global average pool: mean over H and W
+            return x.mean(axis=(-2, -1), keepdims=True)
+        # uniform grid: require divisibility
+        if H % oh != 0 or W % ow != 0:
+            raise ValueError(
+                f"AdaptiveAvgPool2d: input {H}x{W} not divisible by output {oh}x{ow}"
+            )
+        kh, kw = H // oh, W // ow
+        return _AvgPool2dFn.apply(x, kh=kh, kw=kw, stride=kh, padding=0)

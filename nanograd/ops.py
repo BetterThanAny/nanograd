@@ -291,6 +291,44 @@ class Getitem(Function):
 
 
 # ---------------------------------------------------------------------------
+# concat / stack / pad
+# ---------------------------------------------------------------------------
+
+
+class Concat(Function):
+    def forward(self, *arrs, axis):
+        self.axis = axis
+        self.sizes = [a.shape[axis] for a in arrs]
+        return np.concatenate(arrs, axis=axis)
+
+    def backward(self, g):
+        splits = np.cumsum(self.sizes)[:-1]
+        return tuple(np.split(g, splits, axis=self.axis))
+
+
+class Stack(Function):
+    def forward(self, *arrs, axis):
+        self.axis = axis
+        self.n = len(arrs)
+        return np.stack(arrs, axis=axis)
+
+    def backward(self, g):
+        return tuple(np.take(g, i, axis=self.axis) for i in range(self.n))
+
+
+class Pad(Function):
+    """Zero-padding. pad_widths: list of (before, after) tuples, one per axis."""
+
+    def forward(self, a, *, pad_widths):
+        self.pad_widths = pad_widths
+        return np.pad(a, pad_widths)
+
+    def backward(self, g):
+        slices = tuple(slice(p0, g.shape[i] - p1) for i, (p0, p1) in enumerate(self.pad_widths))
+        return (g[slices].copy(),)
+
+
+# ---------------------------------------------------------------------------
 # registration on Tensor
 # ---------------------------------------------------------------------------
 
@@ -338,3 +376,16 @@ Tensor.matmul = lambda self, other: MatMul.apply(self, _wrap(other))
 
 # indexing
 Tensor.__getitem__ = lambda self, idx: Getitem.apply(self, idx=idx)
+
+
+# module-level convenience functions
+def cat(tensors, axis: int = 0):
+    return Concat.apply(*tensors, axis=axis)
+
+
+def stack(tensors, axis: int = 0):
+    return Stack.apply(*tensors, axis=axis)
+
+
+def pad(tensor, pad_widths):
+    return Pad.apply(tensor, pad_widths=pad_widths)
