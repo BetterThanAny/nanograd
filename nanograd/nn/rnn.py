@@ -101,6 +101,50 @@ class LSTMCell(Module):
         return h_new, c_new
 
 
+class GRUCell(Module):
+    """Gated Recurrent Unit cell. Slightly cheaper than LSTM."""
+
+    def __init__(self, input_size: int, hidden_size: int, seed: Optional[int] = None):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        rng = np.random.default_rng(seed)
+        bound = 1 / math.sqrt(hidden_size)
+        # 3 gates: r (reset), z (update), n (candidate)
+        self.W_ih = Parameter(rng.uniform(-bound, bound, size=(input_size, 3 * hidden_size)).astype(np.float32))
+        self.W_hh = Parameter(rng.uniform(-bound, bound, size=(hidden_size, 3 * hidden_size)).astype(np.float32))
+        self.b_ih = Parameter(rng.uniform(-bound, bound, size=(3 * hidden_size,)).astype(np.float32))
+        self.b_hh = Parameter(rng.uniform(-bound, bound, size=(3 * hidden_size,)).astype(np.float32))
+
+    def forward(self, x: Tensor, h: Tensor) -> Tensor:
+        gi = x @ self.W_ih + self.b_ih
+        gh = h @ self.W_hh + self.b_hh
+        H = self.hidden_size
+        r = F.sigmoid(gi[:, 0:H] + gh[:, 0:H])
+        z = F.sigmoid(gi[:, H : 2 * H] + gh[:, H : 2 * H])
+        n = F.tanh(gi[:, 2 * H : 3 * H] + r * gh[:, 2 * H : 3 * H])
+        return (Tensor(np.ones_like(z.data)) - z) * n + z * h
+
+
+class GRU(Module):
+    def __init__(self, input_size: int, hidden_size: int, seed: Optional[int] = None):
+        super().__init__()
+        self.cell = GRUCell(input_size, hidden_size, seed=seed)
+        self.hidden_size = hidden_size
+
+    def forward(self, x: Tensor, h0: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+        B, T, _ = x.shape
+        if h0 is None:
+            h = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
+        else:
+            h = h0
+        outs = []
+        for t in range(T):
+            h = self.cell(x[:, t, :], h)
+            outs.append(h)
+        return _stack(outs, axis=1), h
+
+
 class LSTM(Module):
     def __init__(self, input_size: int, hidden_size: int, seed: Optional[int] = None):
         super().__init__()

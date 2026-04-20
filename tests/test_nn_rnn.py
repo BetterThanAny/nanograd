@@ -53,6 +53,27 @@ def test_lstm_shape(rng):
     assert h.shape == (2, 8) and c.shape == (2, 8)
 
 
+def test_gru_cell_shape(rng):
+    cell = nn.GRUCell(4, 8, seed=0)
+    x = Tensor(rng.standard_normal((3, 4)).astype(np.float32))
+    h = Tensor(np.zeros((3, 8), dtype=np.float32))
+    h1 = cell(x, h)
+    assert h1.shape == (3, 8)
+
+
+def test_gru_shape(rng):
+    m = nn.GRU(4, 8, seed=0)
+    x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
+    out, h = m(x)
+    assert out.shape == (2, 5, 8) and h.shape == (2, 8)
+
+
+def test_gru_gradcheck_small(rng):
+    m = nn.GRU(2, 3, seed=0)
+    x = _rt((1, 3, 2), rng)
+    gradcheck(lambda x: m(x)[0].sum(), [x], atol=1e-2, rtol=1e-2)
+
+
 def test_lstm_gradcheck_small(rng):
     m = nn.LSTM(2, 3, seed=0)
     x = _rt((1, 3, 2), rng)

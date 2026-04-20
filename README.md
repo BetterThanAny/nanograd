@@ -10,11 +10,11 @@ kernel fuser.
 |--------|----------|
 | `nanograd.tensor` | `Tensor` class, dynamic autograd, broadcasting-aware backward |
 | `nanograd.ops` | Elementwise, reductions, `matmul`, shape ops, indexing |
-| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `Conv2d`/`Max/AvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`, `MultiHeadAttention`, `TransformerBlock` |
-| `nanograd.nn.functional` | Stable activations (ReLU/Sigmoid/Tanh/GELU/Softmax/LogSoftmax) and losses (MSE/BCE/BCEWithLogits/CrossEntropy) |
-| `nanograd.optim` | `SGD` (+momentum/nesterov), `Adam`, `AdamW`, `RMSProp`, LR schedulers |
+| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `Embedding`, `Conv2d`/`Max/AvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`, `MultiHeadAttention`, `TransformerBlock` |
+| `nanograd.nn.functional` | Stable activations (ReLU/Sigmoid/Tanh/GELU/Softmax/LogSoftmax) and losses (MSE/BCE/BCEWithLogits/CrossEntropy/L1/Huber) |
+| `nanograd.optim` | `SGD` (+momentum/nesterov), `Adam`, `AdamW`, `Adagrad`, `RMSProp`, LR schedulers |
 | `nanograd.data` | `Dataset`, `DataLoader`, `MNIST`, `CIFAR10` loaders |
-| `nanograd.utils` | `gradcheck`, DOT graph viz, param summary, op profiler |
+| `nanograd.utils` | `gradcheck`, DOT graph viz, param summary, op profiler, checkpoint save/load |
 | `nanograd.jit` | Elementwise op fusion — chain multiple ops into a single buffer |
 
 ## Quickstart
@@ -46,6 +46,8 @@ All milestones are test-verified. Non-slow tests: **138 passing in <1s**.
 | XOR | loss → 0 | 7e-6 |
 | MNIST MLP (5 ep, Adam) | test accuracy | **97.39%** |
 | MNIST CNN (2 ep, Adam) | test accuracy | **98.25%** |
+| CIFAR-10 CNN (1 ep, 5k subset) | test accuracy | **41.96%** (random 10%) |
+| Char-level LSTM LM | memorizes tiny corpus | loss < 0.05, generates correctly |
 | Numerical gradient check | max abs diff | < 1e-3 across all ops |
 | Elementwise fusion | 500×500 chain, 5 ops | **12.7× vs eager** |
 
