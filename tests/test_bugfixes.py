@@ -118,7 +118,7 @@ def test_I1_rnn_empty_sequence():
     x = Tensor(np.zeros((2, 0, 4), dtype=np.float32))
     out, h = m(x)
     assert out.shape == (2, 0, 8)
-    assert h.shape == (2, 8)
+    assert h.shape == (1, 2, 8)  # (num_layers, B, H)
 
 
 def test_I1_lstm_empty_sequence():
@@ -126,7 +126,7 @@ def test_I1_lstm_empty_sequence():
     x = Tensor(np.zeros((2, 0, 4), dtype=np.float32))
     out, (h, c) = m(x)
     assert out.shape == (2, 0, 8)
-    assert h.shape == (2, 8) and c.shape == (2, 8)
+    assert h.shape == (1, 2, 8) and c.shape == (1, 2, 8)
 
 
 def test_I1_gru_empty_sequence():
@@ -134,7 +134,7 @@ def test_I1_gru_empty_sequence():
     x = Tensor(np.zeros((2, 0, 4), dtype=np.float32))
     out, h = m(x)
     assert out.shape == (2, 0, 8)
-    assert h.shape == (2, 8)
+    assert h.shape == (1, 2, 8)
 
 
 # ---------------------------------------------------------------------------

@@ -43,30 +43,42 @@ class RNNCell(Module):
 
 
 class RNN(Module):
-    """Processes a sequence step-by-step using an RNNCell."""
+    """Multi-layer RNN. Stacks ``num_layers`` RNNCells feeding forward hidden states."""
 
-    def __init__(self, input_size: int, hidden_size: int, seed: Optional[int] = None):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        seed: Optional[int] = None,
+    ):
         super().__init__()
-        self.cell = RNNCell(input_size, hidden_size, seed=seed)
         self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        base = seed or 0
+        for i in range(num_layers):
+            inp = input_size if i == 0 else hidden_size
+            setattr(self, f"cell_{i}", RNNCell(inp, hidden_size, seed=base + i * 100))
 
     def forward(self, x: Tensor, h0: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
-        # x: (B, T, D) -> iterate over T
+        # x: (B, T, D); h0: (num_layers, B, H) or None
         B, T, _ = x.shape
         if h0 is None:
-            h = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
+            h_layers = [Tensor(np.zeros((B, self.hidden_size), dtype=np.float32)) for _ in range(self.num_layers)]
         else:
-            h = h0
+            h_layers = [h0[l] for l in range(self.num_layers)]
         if T == 0:
             empty = Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32))
-            return empty, h
+            return empty, _stack(h_layers, axis=0)
         outs = []
         for t in range(T):
             xt = x[:, t, :]
-            h = self.cell(xt, h)
-            outs.append(h)
+            for l in range(self.num_layers):
+                h_layers[l] = getattr(self, f"cell_{l}")(xt, h_layers[l])
+                xt = h_layers[l]
+            outs.append(xt)
         out = _stack(outs, axis=1)
-        return out, h
+        return out, _stack(h_layers, axis=0)
 
 
 # ---------------------------------------------------------------------------
@@ -128,31 +140,54 @@ class GRUCell(Module):
 
 
 class GRU(Module):
-    def __init__(self, input_size: int, hidden_size: int, seed: Optional[int] = None):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        seed: Optional[int] = None,
+    ):
         super().__init__()
-        self.cell = GRUCell(input_size, hidden_size, seed=seed)
         self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        base = seed or 0
+        for i in range(num_layers):
+            inp = input_size if i == 0 else hidden_size
+            setattr(self, f"cell_{i}", GRUCell(inp, hidden_size, seed=base + i * 100))
 
     def forward(self, x: Tensor, h0: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
         B, T, _ = x.shape
         if h0 is None:
-            h = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
+            h_layers = [Tensor(np.zeros((B, self.hidden_size), dtype=np.float32)) for _ in range(self.num_layers)]
         else:
-            h = h0
+            h_layers = [h0[l] for l in range(self.num_layers)]
         if T == 0:
-            return Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32)), h
+            return Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32)), _stack(h_layers, axis=0)
         outs = []
         for t in range(T):
-            h = self.cell(x[:, t, :], h)
-            outs.append(h)
-        return _stack(outs, axis=1), h
+            xt = x[:, t, :]
+            for l in range(self.num_layers):
+                h_layers[l] = getattr(self, f"cell_{l}")(xt, h_layers[l])
+                xt = h_layers[l]
+            outs.append(xt)
+        return _stack(outs, axis=1), _stack(h_layers, axis=0)
 
 
 class LSTM(Module):
-    def __init__(self, input_size: int, hidden_size: int, seed: Optional[int] = None):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        seed: Optional[int] = None,
+    ):
         super().__init__()
-        self.cell = LSTMCell(input_size, hidden_size, seed=seed)
         self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        base = seed or 0
+        for i in range(num_layers):
+            inp = input_size if i == 0 else hidden_size
+            setattr(self, f"cell_{i}", LSTMCell(inp, hidden_size, seed=base + i * 100))
 
     def forward(
         self,
@@ -161,19 +196,24 @@ class LSTM(Module):
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         B, T, _ = x.shape
         if state is None:
-            h = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
-            c = Tensor(np.zeros((B, self.hidden_size), dtype=np.float32))
+            h_layers = [Tensor(np.zeros((B, self.hidden_size), dtype=np.float32)) for _ in range(self.num_layers)]
+            c_layers = [Tensor(np.zeros((B, self.hidden_size), dtype=np.float32)) for _ in range(self.num_layers)]
         else:
             h, c = state
+            h_layers = [h[l] for l in range(self.num_layers)]
+            c_layers = [c[l] for l in range(self.num_layers)]
         if T == 0:
             empty = Tensor(np.zeros((B, 0, self.hidden_size), dtype=np.float32))
-            return empty, (h, c)
+            return empty, (_stack(h_layers, axis=0), _stack(c_layers, axis=0))
         outs = []
         for t in range(T):
-            h, c = self.cell(x[:, t, :], (h, c))
-            outs.append(h)
+            xt = x[:, t, :]
+            for l in range(self.num_layers):
+                h_layers[l], c_layers[l] = getattr(self, f"cell_{l}")(xt, (h_layers[l], c_layers[l]))
+                xt = h_layers[l]
+            outs.append(xt)
         out = _stack(outs, axis=1)
-        return out, (h, c)
+        return out, (_stack(h_layers, axis=0), _stack(c_layers, axis=0))
 
 
 # ---------------------------------------------------------------------------

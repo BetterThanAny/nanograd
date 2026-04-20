@@ -27,7 +27,7 @@ def test_rnn_shape(rng):
     x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
     out, h = rnn(x)
     assert out.shape == (2, 5, 8)
-    assert h.shape == (2, 8)
+    assert h.shape == (1, 2, 8)  # (num_layers, B, H)
 
 
 def test_rnn_gradcheck_small(rng):
@@ -50,7 +50,7 @@ def test_lstm_shape(rng):
     x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
     out, (h, c) = m(x)
     assert out.shape == (2, 5, 8)
-    assert h.shape == (2, 8) and c.shape == (2, 8)
+    assert h.shape == (1, 2, 8) and c.shape == (1, 2, 8)
 
 
 def test_gru_cell_shape(rng):
@@ -65,7 +65,7 @@ def test_gru_shape(rng):
     m = nn.GRU(4, 8, seed=0)
     x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
     out, h = m(x)
-    assert out.shape == (2, 5, 8) and h.shape == (2, 8)
+    assert out.shape == (2, 5, 8) and h.shape == (1, 2, 8)
 
 
 def test_gru_gradcheck_small(rng):
@@ -78,6 +78,43 @@ def test_lstm_gradcheck_small(rng):
     m = nn.LSTM(2, 3, seed=0)
     x = _rt((1, 3, 2), rng)
     gradcheck(lambda x: m(x)[0].sum(), [x], atol=1e-2, rtol=1e-2)
+
+
+def test_multi_layer_rnn_shape(rng):
+    m = nn.RNN(4, 8, num_layers=2, seed=0)
+    x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
+    out, h = m(x)
+    assert out.shape == (2, 5, 8)
+    assert h.shape == (2, 2, 8)  # (num_layers, B, H)
+
+
+def test_multi_layer_lstm_shape(rng):
+    m = nn.LSTM(4, 8, num_layers=3, seed=0)
+    x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
+    out, (h, c) = m(x)
+    assert out.shape == (2, 5, 8)
+    assert h.shape == (3, 2, 8)
+    assert c.shape == (3, 2, 8)
+
+
+def test_multi_layer_gru_shape(rng):
+    m = nn.GRU(4, 8, num_layers=2, seed=0)
+    x = Tensor(rng.standard_normal((2, 5, 4)).astype(np.float32))
+    out, h = m(x)
+    assert out.shape == (2, 5, 8)
+    assert h.shape == (2, 2, 8)
+
+
+def test_multi_layer_rnn_gradcheck_tiny(rng):
+    m = nn.RNN(2, 3, num_layers=2, seed=0)
+    x = _rt((1, 2, 2), rng)
+    gradcheck(lambda x: m(x)[0].sum(), [x], atol=1e-1, rtol=1e-1)
+
+
+def test_multi_layer_has_distinct_params():
+    m = nn.LSTM(4, 8, num_layers=3)
+    # 3 cells × 4 params = 12
+    assert len(list(m.parameters())) == 12
 
 
 def test_bidirectional_shape(rng):

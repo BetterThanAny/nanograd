@@ -339,6 +339,60 @@ class Pad(Function):
 
 
 # ---------------------------------------------------------------------------
+# control flow / select
+# ---------------------------------------------------------------------------
+
+
+class Where(Function):
+    """Elementwise ternary: cond ? a : b. ``cond`` is a plain ndarray (no grad)."""
+
+    def forward(self, a, b, *, cond):
+        self.cond = cond
+        return np.where(cond, a, b)
+
+    def backward(self, g):
+        return g * self.cond, g * (~self.cond)
+
+
+class Clamp(Function):
+    def forward(self, a, *, minv, maxv):
+        self.save_for_backward(a)
+        self.minv = minv
+        self.maxv = maxv
+        return np.clip(a, minv, maxv)
+
+    def backward(self, g):
+        (a,) = self.saved
+        in_range = np.ones_like(a, dtype=g.dtype)
+        if self.minv is not None:
+            in_range *= (a > self.minv).astype(g.dtype)
+        if self.maxv is not None:
+            in_range *= (a < self.maxv).astype(g.dtype)
+        return (g * in_range,)
+
+
+class MaskedFill(Function):
+    """Set elements of `a` to `value` where `mask` is True. mask has no grad."""
+
+    def forward(self, a, *, mask, value):
+        self.mask = mask
+        return np.where(mask, np.float32(value), a)
+
+    def backward(self, g):
+        return (g * (~self.mask).astype(g.dtype),)
+
+
+class CumSum(Function):
+    def forward(self, a, *, axis):
+        self.axis = axis
+        return np.cumsum(a, axis=axis)
+
+    def backward(self, g):
+        # reverse cumsum = cumsum of the reversed, then reverse
+        return (np.flip(np.cumsum(np.flip(g, axis=self.axis), axis=self.axis), axis=self.axis).copy(),)
+
+
+# ---------------------------------------------------------------------------
 # registration on Tensor
 # ---------------------------------------------------------------------------
 
@@ -384,6 +438,16 @@ Tensor.expand = lambda self, *shape: Expand.apply(
 )
 Tensor.matmul = lambda self, other: MatMul.apply(self, _wrap(other))
 
+# clamp / masked_fill / cumsum as methods
+Tensor.clamp = lambda self, minv=None, maxv=None: Clamp.apply(self, minv=minv, maxv=maxv)
+Tensor.clip = Tensor.clamp
+Tensor.masked_fill = lambda self, mask, value: MaskedFill.apply(
+    self, mask=(mask.data if isinstance(mask, Tensor) else np.asarray(mask, dtype=bool)), value=float(value)
+)
+Tensor.cumsum = lambda self, axis=0: CumSum.apply(self, axis=axis)
+Tensor.argmax = lambda self, axis=None: np.argmax(self.data, axis=axis)
+Tensor.argmin = lambda self, axis=None: np.argmin(self.data, axis=axis)
+
 # indexing
 Tensor.__getitem__ = lambda self, idx: Getitem.apply(self, idx=_unwrap_idx(idx))
 
@@ -403,3 +467,56 @@ def stack(tensors, axis: int = 0):
 
 def pad(tensor, pad_widths):
     return Pad.apply(tensor, pad_widths=pad_widths)
+
+
+def where(cond, a, b):
+    """Elementwise select. ``cond`` can be ndarray, Tensor, or bool."""
+    if isinstance(cond, Tensor):
+        cond = cond.data
+    cond = np.asarray(cond, dtype=bool)
+    return Where.apply(_wrap(a), _wrap(b), cond=cond)
+
+
+def clamp(tensor, minv=None, maxv=None):
+    return Clamp.apply(tensor, minv=minv, maxv=maxv)
+
+
+def masked_fill(tensor, mask, value):
+    if isinstance(mask, Tensor):
+        mask = mask.data
+    return MaskedFill.apply(tensor, mask=np.asarray(mask, dtype=bool), value=float(value))
+
+
+def cumsum(tensor, axis: int = 0):
+    return CumSum.apply(tensor, axis=axis)
+
+
+def argmax(tensor, axis=None):
+    """Non-differentiable index-of-max. Returns a plain ndarray."""
+    t = tensor.data if isinstance(tensor, Tensor) else np.asarray(tensor)
+    return np.argmax(t, axis=axis)
+
+
+def argmin(tensor, axis=None):
+    t = tensor.data if isinstance(tensor, Tensor) else np.asarray(tensor)
+    return np.argmin(t, axis=axis)
+
+
+def topk(tensor, k: int, axis: int = -1):
+    """Return (values, indices) of the top-k elements along ``axis``.
+
+    Non-differentiable with respect to indices; values retain grad.
+    """
+    data = tensor.data if isinstance(tensor, Tensor) else np.asarray(tensor)
+    # use argpartition for speed, then sort only the top-k
+    idx_part = np.argpartition(-data, kth=k - 1, axis=axis)
+    idx_topk = np.take(idx_part, np.arange(k), axis=axis)
+    # sort the top-k by actual values descending
+    vals_topk = np.take_along_axis(data, idx_topk, axis=axis)
+    order = np.argsort(-vals_topk, axis=axis)
+    idx_topk = np.take_along_axis(idx_topk, order, axis=axis)
+    # gather via Tensor's Getitem for differentiable values
+    # simplest: produce index-tensor and use Getitem with fancy indexing
+    vals = np.take_along_axis(data, idx_topk, axis=axis)
+    # wrap values in a new Tensor; not differentiable through topk (would need full gather op)
+    return Tensor(vals), idx_topk
