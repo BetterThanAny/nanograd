@@ -68,6 +68,43 @@ def test_small_classification():
     assert acc >= 0.95, f"acc={acc}"
 
 
+def test_char_lm_memorizes():
+    """LSTM + Embedding on a tiny repeating corpus. Should drop loss near zero."""
+    corpus = "hello world, goodbye world, " * 10
+    chars = sorted(set(corpus))
+    c2i = {c: i for i, c in enumerate(chars)}
+    V = len(chars)
+    ids = np.array([c2i[c] for c in corpus], dtype=np.int64)
+    T = 30
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.emb = nn.Embedding(V, 16, seed=0)
+            self.lstm = nn.LSTM(16, 32, seed=1)
+            self.head = nn.Linear(32, V, seed=2)
+
+        def forward(self, idx):
+            x = self.emb(idx)
+            out, _ = self.lstm(x)
+            B, Tc, H = out.shape
+            return self.head(out.reshape(B * Tc, H))
+
+    model = Net()
+    opt = optim.Adam(model.parameters(), lr=5e-3)
+    rng = np.random.default_rng(0)
+    for _ in range(200):
+        start = rng.integers(0, len(ids) - T - 1)
+        x = ids[start : start + T][None, :]
+        y = ids[start + 1 : start + T + 1]
+        logits = model(x)
+        loss = F.cross_entropy(logits, Tensor(y))
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    assert loss.item() < 0.3, f"char LM did not converge: loss={loss.item()}"
+
+
 @pytest.mark.slow
 def test_mnist_mlp_reaches_95():
     from nanograd.data import DataLoader
