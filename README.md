@@ -10,9 +10,10 @@ kernel fuser.
 |--------|----------|
 | `nanograd.tensor` | `Tensor` class, dynamic autograd, broadcasting-aware backward |
 | `nanograd.ops` | Elementwise, reductions, `matmul`, shape ops, `cat`/`stack`/`pad`, indexing |
-| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `GroupNorm`, `InstanceNorm2d`, `Embedding`, `Conv2d`, `MaxPool2d`, `AvgPool2d`, `AdaptiveAvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`, `MultiHeadAttention`, `TransformerBlock` |
+| `nanograd.nn` | `Module`, `Linear`, `Sequential`, `Dropout`, `LayerNorm`, `GroupNorm`, `InstanceNorm2d`, `Embedding`, `Conv2d`, `ConvTranspose2d`, `MaxPool2d`, `AvgPool2d`, `AdaptiveAvgPool2d`, `BatchNorm2d`, `RNN`/`LSTM`/`GRU`/`Bidirectional`, `MultiHeadAttention`, `SinusoidalPositionalEncoding`, `LearnedPositionalEncoding`, `TransformerBlock` |
+| `nanograd.nn.init` | Kaiming / Xavier (uniform + normal), zeros/ones/normal/uniform initializers |
 | `nanograd.nn.functional` | Stable activations (ReLU / Sigmoid / Tanh / GELU / ELU / SiLU / Mish / Softmax / LogSoftmax) and losses (MSE / BCE / BCEWithLogits / CrossEntropy / L1 / Huber) |
-| `nanograd.optim` | `SGD` (+momentum / nesterov), `Adam`, `AdamW`, `Adagrad`, `RMSProp`, LR schedulers |
+| `nanograd.optim` | `SGD` (+momentum / nesterov), `Adam`, `AdamW`, `Adagrad`, `RMSProp`, LR schedulers, `clip_grad_norm_`, `clip_grad_value_` |
 | `nanograd.data` | `Dataset`, `DataLoader`, `MNIST`, `CIFAR10` loaders, image transforms (`Normalize`, `RandomCrop`, `RandomHorizontalFlip`) |
 | `nanograd.models` | Prebuilt architectures: `BasicBlock`, `ResNet`, `resnet18`, `resnet_cifar` |
 | `nanograd.training` | `EarlyStopping`, `ModelCheckpoint`, `MetricTracker` |
@@ -41,7 +42,7 @@ for X, y in loader:
 
 ## Verification metrics
 
-All milestones are test-verified. Non-slow tests: **212 passing in ~3s**.
+All milestones are test-verified. Non-slow tests: **236 passing in ~3s**.
 
 | Task | Metric | Achieved |
 |------|--------|----------|
@@ -51,6 +52,8 @@ All milestones are test-verified. Non-slow tests: **212 passing in ~3s**.
 | CIFAR-10 CNN (1 ep, 5k subset) | test accuracy | **41.96%** (random 10%) |
 | CIFAR-10 ResNet-8 (n=1, 1 ep, 5k subset, w/ aug) | test accuracy | **32.54%** (3.2× random) |
 | Char-level LSTM LM | memorizes tiny corpus | loss < 0.05, generates correctly |
+| MNIST Conv autoencoder (3 ep) | reconstruction MSE | 0.25 → **0.013** |
+| Tiny Transformer LM (300 steps) | loss + generation | 0.63 → **0.12**, completes "the quick brown fox jumps over the lazy dog" |
 | Numerical gradient check | max abs diff | < 1e-3 across all ops |
 | Elementwise fusion | 500×500 chain, 5 ops | **12.7× vs eager** |
 

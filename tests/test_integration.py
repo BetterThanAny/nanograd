@@ -68,6 +68,86 @@ def test_small_classification():
     assert acc >= 0.95, f"acc={acc}"
 
 
+def test_autoencoder_reconstruction():
+    """ConvTranspose + Conv autoencoder memorizes a small image set."""
+    rng = np.random.default_rng(0)
+    X = rng.random((64, 1, 16, 16)).astype(np.float32)  # small images
+
+    class AE(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.enc = nn.Sequential(
+                nn.Conv2d(1, 8, 3, stride=2, padding=1, seed=0),
+                nn.ReLU(),
+                nn.Conv2d(8, 16, 3, stride=2, padding=1, seed=1),
+                nn.ReLU(),
+            )
+            self.dec = nn.Sequential(
+                nn.ConvTranspose2d(16, 8, 2, stride=2, seed=2),
+                nn.ReLU(),
+                nn.ConvTranspose2d(8, 1, 2, stride=2, seed=3),
+                nn.Sigmoid(),
+            )
+
+        def forward(self, x):
+            return self.dec(self.enc(x))
+
+    model = AE()
+    opt = optim.Adam(model.parameters(), lr=3e-3)
+    for _ in range(50):
+        r = model(Tensor(X))
+        loss = F.mse_loss(r, Tensor(X))
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    # initial MSE is ~0.1-0.25 (sigmoid outputs ~0.5, input random 0-1)
+    assert loss.item() < 0.1, f"autoencoder did not learn: mse={loss.item()}"
+
+
+def test_transformer_lm_memorizes_short_string():
+    """Tiny Transformer learns to complete a repeating string."""
+    corpus = "abc def. " * 20
+    chars = sorted(set(corpus))
+    c2i = {c: i for i, c in enumerate(chars)}
+    V = len(chars)
+    ids = np.array([c2i[c] for c in corpus], dtype=np.int64)
+    T = 16
+
+    class TLM(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.emb = nn.Embedding(V, 16, seed=0)
+            self.pos = nn.SinusoidalPositionalEncoding(T + 2, 16)
+            self.block = nn.TransformerBlock(16, 2, seed=1)
+            self.ln = nn.LayerNorm(16)
+            self.head = nn.Linear(16, V, seed=2)
+
+        def forward(self, idx):
+            x = self.emb(idx)
+            x = self.pos(x)
+            Tc = x.shape[1]
+            mask = np.tril(np.ones((Tc, Tc), dtype=bool))[None, None, :, :]
+            x = self.block(x, mask=mask)
+            x = self.ln(x)
+            return self.head(x)
+
+    model = TLM()
+    opt = optim.Adam(model.parameters(), lr=5e-3)
+    rng = np.random.default_rng(0)
+    for _ in range(150):
+        start = rng.integers(0, len(ids) - T - 1)
+        x = ids[start : start + T][None, :]
+        y = ids[start + 1 : start + T + 1]
+        logits = model(x)
+        B, Tc, V_ = logits.shape
+        loss = F.cross_entropy(logits.reshape(B * Tc, V_), Tensor(y))
+        opt.zero_grad()
+        loss.backward()
+        optim.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        opt.step()
+    assert loss.item() < 0.3, f"Transformer LM did not converge: {loss.item()}"
+
+
 def test_char_lm_memorizes():
     """LSTM + Embedding on a tiny repeating corpus. Should drop loss near zero."""
     corpus = "hello world, goodbye world, " * 10
