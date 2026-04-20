@@ -270,18 +270,29 @@ class EMA:
             self.ema = ema
             self.model = model
             self._backup: dict[str, np.ndarray] = {}
+            self._buf_backup: dict[str, np.ndarray] = {}
 
         def __enter__(self):
             for name, p in self.model.named_parameters():
                 self._backup[name] = p.data.copy()
                 if name in self.ema._shadow:
                     p.data[...] = self.ema._shadow[name]
+            if self.ema.include_buffers and hasattr(self.model, "named_buffers"):
+                for name, b in self.model.named_buffers():
+                    self._buf_backup[name] = b.copy()
+                    key = f"_buf_:{name}"
+                    if key in self.ema._shadow:
+                        b[...] = self.ema._shadow[key]
             return self.model
 
         def __exit__(self, *exc):
             for name, p in self.model.named_parameters():
                 if name in self._backup:
                     p.data[...] = self._backup[name]
+            if self.ema.include_buffers and hasattr(self.model, "named_buffers"):
+                for name, b in self.model.named_buffers():
+                    if name in self._buf_backup:
+                        b[...] = self._buf_backup[name]
 
     def swap_into(self, model: Optional[Module] = None):
         """Context manager that installs EMA weights for ``model`` for its duration."""

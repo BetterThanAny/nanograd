@@ -56,6 +56,25 @@ def test_ema_buffers_tracked_when_requested():
     assert set(bufs_shadow.keys()) == set(bufs.keys())
 
 
+def test_ema_swap_into_also_swaps_buffers():
+    """Regression: _Swap.__enter__ must install EMA-shadowed buffers, not just params."""
+    bn = nn.BatchNorm2d(4)
+    ema = EMA(bn, decay=0.5, include_buffers=True)
+    # force shadow buffers to a known sentinel
+    for key in list(ema._shadow):
+        if key.startswith("_buf_:"):
+            ema._shadow[key] = np.full_like(ema._shadow[key], 7.0)
+    # set live buffers to something obviously different
+    for _name, b in bn.named_buffers():
+        b[...] = 3.0
+    live_before = {n: b.copy() for n, b in bn.named_buffers()}
+    with ema.swap_into(bn):
+        for _name, b in bn.named_buffers():
+            np.testing.assert_array_equal(b, 7.0), "buffer not swapped to EMA value"
+    for name, b in bn.named_buffers():
+        np.testing.assert_array_equal(b, live_before[name]), f"buffer not restored: {name}"
+
+
 def test_ema_smooths_noisy_training():
     """Targets have per-batch noise — raw params oscillate, EMA should be smoother and at least as accurate."""
     rng = np.random.default_rng(0)
