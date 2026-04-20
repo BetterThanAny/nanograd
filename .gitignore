@@ -9,7 +9,7 @@ dist/
 build/
 *.npz
 *.npy
-data/
+/data/
 uv.lock
 
 # claude-local (per global policy)
