@@ -9,8 +9,51 @@ import numpy as np
 from nanograd.function import Function
 from nanograd.nn import functional as F
 from nanograd.nn.layers import LayerNorm, Linear
-from nanograd.nn.module import Module
+from nanograd.nn.module import Module, Parameter
 from nanograd.tensor import Tensor
+
+
+def sinusoidal_positional_encoding(max_len: int, dim: int) -> np.ndarray:
+    """Classic Transformer positional encoding (Vaswani et al. 2017).
+
+    Returns (max_len, dim) ndarray of sin/cos frequencies.
+    """
+    pe = np.zeros((max_len, dim), dtype=np.float32)
+    pos = np.arange(max_len, dtype=np.float32)[:, None]
+    div = np.exp(np.arange(0, dim, 2, dtype=np.float32) * (-math.log(10000.0) / dim))
+    pe[:, 0::2] = np.sin(pos * div)
+    pe[:, 1::2] = np.cos(pos * div[: (dim // 2 + dim % 2)] if dim % 2 else pos * div)
+    return pe
+
+
+class SinusoidalPositionalEncoding(Module):
+    """Adds fixed sinusoidal positional encoding to input."""
+
+    def __init__(self, max_len: int, dim: int):
+        super().__init__()
+        pe = sinusoidal_positional_encoding(max_len, dim)
+        self.register_buffer("pe", pe)
+        self.max_len = max_len
+
+    def forward(self, x: Tensor) -> Tensor:
+        T = x.shape[-2]
+        assert T <= self.max_len, f"seq length {T} exceeds max_len {self.max_len}"
+        return x + Tensor(self.pe[:T])
+
+
+class LearnedPositionalEncoding(Module):
+    """Learnable position embedding."""
+
+    def __init__(self, max_len: int, dim: int, seed: Optional[int] = None):
+        super().__init__()
+        rng = np.random.default_rng(seed)
+        self.weight = Parameter(rng.standard_normal((max_len, dim)).astype(np.float32) * 0.02)
+        self.max_len = max_len
+
+    def forward(self, x: Tensor) -> Tensor:
+        T = x.shape[-2]
+        assert T <= self.max_len
+        return x + self.weight[:T]
 
 
 def scaled_dot_product_attention(

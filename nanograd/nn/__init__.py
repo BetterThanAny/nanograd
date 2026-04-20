@@ -4,6 +4,7 @@ from nanograd.nn.conv import (
     AvgPool2d,
     BatchNorm2d,
     Conv2d,
+    ConvTranspose2d,
     Flatten,
     GroupNorm,
     InstanceNorm2d,
@@ -24,7 +25,14 @@ from nanograd.nn.layers import (
     Softmax,
     Tanh,
 )
-from nanograd.nn.attention import MultiHeadAttention, TransformerBlock, scaled_dot_product_attention
+from nanograd.nn.attention import (
+    LearnedPositionalEncoding,
+    MultiHeadAttention,
+    SinusoidalPositionalEncoding,
+    TransformerBlock,
+    scaled_dot_product_attention,
+    sinusoidal_positional_encoding,
+)
 from nanograd.nn.embedding import Embedding
 from nanograd.nn.module import Module, Parameter
 from nanograd.nn.rnn import Bidirectional, GRU, GRUCell, LSTM, LSTMCell, RNN, RNNCell
@@ -47,6 +55,7 @@ __all__ = [
     "LeakyReLU",
     "Softmax",
     "Conv2d",
+    "ConvTranspose2d",
     "MaxPool2d",
     "AvgPool2d",
     "AdaptiveAvgPool2d",
@@ -64,5 +73,8 @@ __all__ = [
     "MultiHeadAttention",
     "TransformerBlock",
     "scaled_dot_product_attention",
+    "sinusoidal_positional_encoding",
+    "SinusoidalPositionalEncoding",
+    "LearnedPositionalEncoding",
     "Embedding",
 ]

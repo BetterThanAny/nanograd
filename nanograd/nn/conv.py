@@ -106,6 +106,79 @@ class _Conv2dFn(Function):
         return dx, dw
 
 
+class _ConvTranspose2dFn(Function):
+    """Transposed conv2d (aka fractionally-strided conv / deconvolution).
+
+    Given (N, C_in, H, W) input and weight (C_in, C_out, k, k), produce
+    (N, C_out, H', W') where H' = (H - 1) * stride - 2 * padding + k.
+    """
+
+    def forward(self, x, w, *, stride, padding):
+        N, C_in, H, W = x.shape
+        C_in_w, C_out, kh, kw = w.shape
+        assert C_in == C_in_w, f"in channels mismatch: x={C_in} w={C_in_w}"
+        H_out = (H - 1) * stride - 2 * padding + kh
+        W_out = (W - 1) * stride - 2 * padding + kw
+
+        # einsum-based scatter: cols[n, c_out, i, j, h, w] = sum_c x[n, c, h, w] * w[c, c_out, i, j]
+        cols = np.einsum("nchw,coij->noijhw", x, w)
+        # col2im puts this back into the output spatial layout
+        out = col2im(cols, (N, C_out, H_out, W_out), stride=stride, pad=padding)
+        self.save_for_backward(x, w)
+        self.stride, self.padding, self.kh, self.kw = stride, padding, kh, kw
+        return out
+
+    def backward(self, grad_out):
+        x, w = self.saved
+        stride, padding = self.stride, self.padding
+        kh, kw = self.kh, self.kw
+        N, C_in, H, W = x.shape
+        _, C_out, _, _ = w.shape
+
+        # dcols = im2col(grad_out) with (N, C_out, kh, kw, H, W)
+        dcols = im2col(grad_out, kh, kw, stride, padding)
+        # dx[n, c, h, w] = sum_{c_out, i, j} dcols[n, c_out, i, j, h, w] * w[c, c_out, i, j]
+        dx = np.einsum("noijhw,coij->nchw", dcols, w)
+        # dw[c, c_out, i, j] = sum_{n, h, w} x[n, c, h, w] * dcols[n, c_out, i, j, h, w]
+        dw = np.einsum("nchw,noijhw->coij", x, dcols)
+        return dx, dw
+
+
+class ConvTranspose2d(Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Union[int, Tuple[int, int]],
+        stride: int = 1,
+        padding: int = 0,
+        bias: bool = True,
+        seed: Optional[int] = None,
+    ):
+        super().__init__()
+        kh, kw = _pair(kernel_size)
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kh, self.kw = kh, kw
+        self.stride = stride
+        self.padding = padding
+        rng = np.random.default_rng(seed)
+        fan_in = in_channels * kh * kw
+        bound = 1 / math.sqrt(fan_in)
+        w = rng.uniform(-bound, bound, size=(in_channels, out_channels, kh, kw)).astype(np.float32)
+        self.weight = Parameter(w)
+        if bias:
+            self.bias = Parameter(rng.uniform(-bound, bound, size=(out_channels,)).astype(np.float32))
+        else:
+            self.bias = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        out = _ConvTranspose2dFn.apply(x, self.weight, stride=self.stride, padding=self.padding)
+        if self.bias is not None:
+            out = out + self.bias.reshape(1, self.out_channels, 1, 1)
+        return out
+
+
 class Conv2d(Module):
     def __init__(
         self,
