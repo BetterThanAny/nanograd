@@ -219,3 +219,46 @@ def test_C5_state_dict_nested_buffers():
     w2 = Wrap()
     w2.load_state_dict(sd)
     assert np.allclose(w2.bn.running_mean, w.bn.running_mean)
+
+
+# ---------------------------------------------------------------------------
+# C6: matmul backward handles NumPy 1D operand semantics
+# ---------------------------------------------------------------------------
+
+
+def test_C6_matmul_1d_1d_backward():
+    a = Tensor(np.array([1.0, 2.0, 3.0], dtype=np.float32), requires_grad=True)
+    b = Tensor(np.array([4.0, 5.0, 6.0], dtype=np.float32), requires_grad=True)
+
+    y = a @ b
+    assert y.shape == ()
+    y.backward()
+
+    assert np.array_equal(a.grad, b.data)
+    assert np.array_equal(b.grad, a.data)
+
+
+def test_C6_matmul_1d_2d_backward():
+    a = Tensor(np.array([1.0, 2.0, 3.0], dtype=np.float32), requires_grad=True)
+    b = Tensor(np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32), requires_grad=True)
+    upstream = np.array([10.0, 20.0], dtype=np.float32)
+
+    y = a @ b
+    assert y.shape == (2,)
+    y.backward(upstream)
+
+    assert np.array_equal(a.grad, upstream @ b.data.T)
+    assert np.array_equal(b.grad, np.outer(a.data, upstream))
+
+
+def test_C6_matmul_2d_1d_backward():
+    a = Tensor(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32), requires_grad=True)
+    b = Tensor(np.array([7.0, 8.0, 9.0], dtype=np.float32), requires_grad=True)
+    upstream = np.array([10.0, 20.0], dtype=np.float32)
+
+    y = a @ b
+    assert y.shape == (2,)
+    y.backward(upstream)
+
+    assert np.array_equal(a.grad, np.outer(upstream, b.data))
+    assert np.array_equal(b.grad, a.data.T @ upstream)

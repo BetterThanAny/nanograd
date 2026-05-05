@@ -143,6 +143,16 @@ def test_topk_2d_axis():
     assert np.array_equal(idx, [[1, 2], [0, 2]])
 
 
+def test_topk_values_backward_scatters_to_source_indices():
+    a = Tensor(np.array([[1, 5, 3], [8, 2, 7]], dtype=np.float32), requires_grad=True)
+    vals, idx = ng.topk(a, k=2, axis=1)
+    vals.backward(np.array([[10, 20], [30, 40]], dtype=np.float32))
+
+    assert vals.requires_grad
+    assert isinstance(idx, np.ndarray)
+    assert np.array_equal(a.grad, [[0, 10, 20], [30, 0, 40]])
+
+
 # ---------- where broadcasting ----------
 
 

@@ -210,7 +210,7 @@ def _reduce_grad(g: np.ndarray, in_shape: Tuple[int, ...], axis, keepdims: bool)
 
 
 class MatMul(Function):
-    """Supports 2D x 2D and batched (..., M, K) x (..., K, N)."""
+    """Supports NumPy matmul semantics, including 1D vector operands."""
 
     def forward(self, a, b):
         self.save_for_backward(a, b)
@@ -218,9 +218,25 @@ class MatMul(Function):
 
     def backward(self, g):
         a, b = self.saved
-        # swap last two dims
-        da = g @ _swap_last_two(b)
-        db = _swap_last_two(a) @ g
+        a_mat = np.expand_dims(a, -2) if a.ndim == 1 else a
+        b_mat = np.expand_dims(b, -1) if b.ndim == 1 else b
+
+        if a.ndim == 1 and b.ndim == 1:
+            g_mat = np.reshape(g, (1, 1))
+        elif a.ndim == 1:
+            g_mat = np.expand_dims(g, -2)
+        elif b.ndim == 1:
+            g_mat = np.expand_dims(g, -1)
+        else:
+            g_mat = g
+
+        da = g_mat @ _swap_last_two(b_mat)
+        db = _swap_last_two(a_mat) @ g_mat
+
+        if a.ndim == 1:
+            da = np.squeeze(da, axis=-2)
+        if b.ndim == 1:
+            db = np.squeeze(db, axis=-1)
         return da, db
 
 
@@ -392,6 +408,28 @@ class CumSum(Function):
         return (np.flip(np.cumsum(np.flip(g, axis=self.axis), axis=self.axis), axis=self.axis).copy(),)
 
 
+class TopKValues(Function):
+    def forward(self, a, *, k: int, axis: int):
+        axis = axis % a.ndim
+        self.axis = axis
+        self.in_shape = a.shape
+
+        idx_part = np.argpartition(-a, kth=k - 1, axis=axis)
+        idx_topk = np.take(idx_part, np.arange(k), axis=axis)
+        vals_topk = np.take_along_axis(a, idx_topk, axis=axis)
+        order = np.argsort(-vals_topk, axis=axis)
+        idx_topk = np.take_along_axis(idx_topk, order, axis=axis)
+
+        self.save_for_backward(idx_topk)
+        return np.take_along_axis(a, idx_topk, axis=axis)
+
+    def backward(self, g):
+        (idx_topk,) = self.saved
+        out = np.zeros(self.in_shape, dtype=g.dtype)
+        np.put_along_axis(out, idx_topk, g, axis=self.axis)
+        return (out,)
+
+
 # ---------------------------------------------------------------------------
 # registration on Tensor
 # ---------------------------------------------------------------------------
@@ -515,8 +553,5 @@ def topk(tensor, k: int, axis: int = -1):
     vals_topk = np.take_along_axis(data, idx_topk, axis=axis)
     order = np.argsort(-vals_topk, axis=axis)
     idx_topk = np.take_along_axis(idx_topk, order, axis=axis)
-    # gather via Tensor's Getitem for differentiable values
-    # simplest: produce index-tensor and use Getitem with fancy indexing
-    vals = np.take_along_axis(data, idx_topk, axis=axis)
-    # wrap values in a new Tensor; not differentiable through topk (would need full gather op)
-    return Tensor(vals), idx_topk
+    vals = TopKValues.apply(_wrap(tensor), k=k, axis=axis)
+    return vals, idx_topk
